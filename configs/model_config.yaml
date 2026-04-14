@@ -8,10 +8,10 @@ model:
   
   # Base coding model (Apache 2.0 licensed)
   base:
-    name: "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
-    parameters: "16B"
+    name: "Qwen/Qwen2.5-Coder-7B-Instruct"
+    parameters: "7.61B"
     license: "Apache-2.0"
-    context_length: 8192
+    context_length: 32768
     dtype: "bfloat16"
 
   # Vision encoder for UI screenshot understanding
