@@ -1,0 +1,45 @@
+# ==========================================
+# MINDI 1.5 Vision-Coder — Search Agent Configuration
+# ==========================================
+
+search:
+  # Primary search provider
+  provider: "tavily"
+  api_key_env: "TAVILY_API_KEY"
+
+  # Search behavior
+  max_results: 5
+  search_depth: "advanced"
+  include_domains:
+    - "nextjs.org"
+    - "tailwindcss.com"
+    - "typescriptlang.org"
+    - "react.dev"
+    - "ui.shadcn.com"
+    - "developer.mozilla.org"
+    - "npmjs.com"
+    - "github.com"
+  exclude_domains:
+    - "w3schools.com"
+    - "geeksforgeeks.org"
+
+  # Rate limiting
+  rate_limit:
+    requests_per_minute: 30
+    retry_attempts: 3
+    retry_delay_seconds: 2
+
+  # Caching
+  cache:
+    enabled: true
+    ttl_hours: 24
+    max_entries: 10000
+    storage_path: "./data/knowledge_base/search_cache.db"
+
+  # Documentation scraping
+  docs_scraper:
+    enabled: true
+    output_dir: "./docs/"
+    max_pages_per_site: 100
+    respect_robots_txt: true
+    request_delay_seconds: 1

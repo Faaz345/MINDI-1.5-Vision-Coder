@@ -1,0 +1,62 @@
+# ==========================================
+# MINDI 1.5 Vision-Coder — Data Configuration
+# ==========================================
+
+dataset:
+  name: "mindi-1.5-training-data"
+  target_size: 500000
+  format: "jsonl"
+
+  # Data sources for fine-tuning
+  sources:
+    - name: "code_generation"
+      description: "Prompt → Next.js + Tailwind + TypeScript code pairs"
+      path: "./data/raw/code_generation/"
+      weight: 0.40
+
+    - name: "ui_critique"
+      description: "Screenshot + code → critique + improved code pairs"
+      path: "./data/raw/ui_critique/"
+      weight: 0.20
+
+    - name: "error_correction"
+      description: "Broken code → fixed code pairs with explanations"
+      path: "./data/raw/error_correction/"
+      weight: 0.15
+
+    - name: "documentation_qa"
+      description: "Documentation context → code answer pairs"
+      path: "./data/raw/documentation_qa/"
+      weight: 0.10
+
+    - name: "multi_turn"
+      description: "Multi-turn conversation with iterative refinement"
+      path: "./data/raw/multi_turn/"
+      weight: 0.15
+
+  # Processing
+  processing:
+    tokenizer: "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
+    max_length: 8192
+    min_length: 64
+    dedup_strategy: "minhash"
+    quality_filter: true
+    output_dir: "./data/processed/"
+
+  # Train / validation split
+  splits:
+    train: 0.95
+    validation: 0.05
+
+  # Knowledge base for RAG
+  knowledge_base:
+    path: "./data/knowledge_base/"
+    sources:
+      - "nextjs-14-docs"
+      - "tailwindcss-docs"
+      - "typescript-docs"
+      - "react-docs"
+      - "shadcn-ui-docs"
+    embedding_model: "BAAI/bge-small-en-v1.5"
+    chunk_size: 512
+    chunk_overlap: 64
