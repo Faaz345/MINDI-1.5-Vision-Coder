@@ -1,0 +1,53 @@
+# ==========================================
+# MINDI 1.5 Vision-Coder — Model Configuration
+# ==========================================
+
+model:
+  name: "MINDI-1.5-Vision-Coder"
+  version: "1.5.0"
+  
+  # Base coding model (Apache 2.0 licensed)
+  base:
+    name: "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
+    parameters: "16B"
+    license: "Apache-2.0"
+    context_length: 8192
+    dtype: "bfloat16"
+
+  # Vision encoder for UI screenshot understanding
+  vision:
+    name: "openai/clip-vit-large-patch14"
+    image_size: 224
+    patch_size: 14
+    hidden_size: 1024
+    projection_dim: 768
+    freeze_backbone: true
+    trainable_projection: true
+
+  # LoRA fine-tuning configuration
+  lora:
+    rank: 64
+    alpha: 128
+    dropout: 0.05
+    target_modules:
+      - "q_proj"
+      - "k_proj"
+      - "v_proj"
+      - "o_proj"
+      - "gate_proj"
+      - "up_proj"
+      - "down_proj"
+    bias: "none"
+    task_type: "CAUSAL_LM"
+
+  # Output format
+  output:
+    framework: "nextjs-14"
+    styling: "tailwindcss"
+    language: "typescript"
+    template_format: "markdown-codeblock"
+
+huggingface:
+  repo_id: "Mindigenous/MINDI-1.5-Vision-Coder"
+  private: false
+  license: "apache-2.0"
