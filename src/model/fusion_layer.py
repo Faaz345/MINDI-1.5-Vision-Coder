@@ -46,6 +46,10 @@ class VisionLanguageFusion(nn.Module):
         self.gate_proj = nn.Linear(hidden_size, hidden_size)
         self.layer_norm = nn.LayerNorm(hidden_size)
 
+        # Text-only residual gate (learnable scalar, starts at 0 so text path
+        # is identity at init, then gradually blends in the fusion transform)
+        self.text_gate = nn.Parameter(torch.zeros(1))
+
     def forward(
         self,
         text_embeds: torch.Tensor,
@@ -65,9 +69,15 @@ class VisionLanguageFusion(nn.Module):
             fused_embeds: (batch, 256 + seq_len, hidden_size) if visual, else unchanged.
             fused_mask: Extended attention mask, or None if input mask was None.
         """
-        # Text-only path — no vision tokens to fuse
+        # Text-only path — apply a learnable residual gate through the
+        # fusion parameters so gradients can flow to fusion even without images.
+        # At init text_gate=0 → sigmoid(0)=0.5, but the residual structure
+        # means the output ≈ text_embeds until the gate is trained.
         if visual_tokens is None:
-            return text_embeds, attention_mask
+            alpha = torch.sigmoid(self.text_gate)
+            transformed = self.layer_norm(self.gate_proj(text_embeds))
+            fused_embeds = text_embeds + alpha * (transformed - text_embeds)
+            return fused_embeds, attention_mask
 
         batch_size = text_embeds.shape[0]
         v_batch = visual_tokens.shape[0]
