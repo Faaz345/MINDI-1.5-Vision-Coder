@@ -95,7 +95,7 @@ echo ""
 echo "[5/7] Setting environment variables ..."
 
 # ROCm / PyTorch settings for MI300X
-export HSA_OVERRIDE_GFX_VERSION=11.0.0
+# NOTE: Do NOT set HSA_OVERRIDE_GFX_VERSION — ROCm 7.0 has native gfx942 support
 export PYTORCH_ROCM_ARCH="gfx942"
 export HIP_VISIBLE_DEVICES=0
 export TOKENIZERS_PARALLELISM=false
@@ -104,7 +104,6 @@ export WANDB_PROJECT="mindi-1.5-vision-coder"
 # Create .env file for the project
 cat > .env << EOF
 HF_TOKEN=${HF_TOKEN}
-HSA_OVERRIDE_GFX_VERSION=11.0.0
 PYTORCH_ROCM_ARCH=gfx942
 HIP_VISIBLE_DEVICES=0
 TOKENIZERS_PARALLELISM=false
@@ -115,7 +114,6 @@ EOF
 grep -q "HSA_OVERRIDE_GFX_VERSION" ~/.bashrc 2>/dev/null || cat >> ~/.bashrc << 'ENVEOF'
 
 # MINDI 1.5 MI300X environment
-export HSA_OVERRIDE_GFX_VERSION=11.0.0
 export PYTORCH_ROCM_ARCH=gfx942
 export HIP_VISIBLE_DEVICES=0
 export TOKENIZERS_PARALLELISM=false
