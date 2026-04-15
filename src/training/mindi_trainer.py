@@ -21,10 +21,15 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Optional
+
+# Force unbuffered stdout for docker exec -d log visibility
+if not sys.stdout.line_buffering:
+    sys.stdout.reconfigure(line_buffering=True)
 
 import torch
 import torch.nn as nn
