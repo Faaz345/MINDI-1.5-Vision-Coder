@@ -2,8 +2,8 @@
 MINDI 1.5 Vision-Coder — Vision Encoder
 
 Uses CLIP ViT-L/14 (frozen) to encode UI screenshots into 256 visual
-tokens projected from 1024 → 4096 to match the Qwen hidden dimension.
-Output shape: (batch, 256, 4096).
+tokens projected from 1024 → 3584 to match the Qwen hidden dimension.
+Output shape: (batch, 256, 3584).
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ class VisionEncoder(nn.Module):
     CLIP ViT-L/14 vision encoder for MINDI 1.5.
 
     Extracts ALL 256 patch tokens (excludes CLS) from CLIP and
-    projects them from 1024 → 4096 to match Qwen2.5 hidden_size.
+    projects them from 1024 → 3584 to match Qwen2.5 hidden_size.
     The CLIP backbone is frozen; only the projection layer trains.
     """
 
@@ -31,7 +31,7 @@ class VisionEncoder(nn.Module):
     def __init__(
         self,
         model_name: str = "openai/clip-vit-large-patch14",
-        llm_hidden_size: int = 4096,
+        llm_hidden_size: int = 3584,
         device: Optional[str] = None,
         cache_dir: Optional[Path] = None,
         torch_dtype: torch.dtype = torch.float32,

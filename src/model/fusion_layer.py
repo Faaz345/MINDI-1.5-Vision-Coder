@@ -1,7 +1,7 @@
 """
 MINDI 1.5 Vision-Coder — Vision-Language Fusion Layer
 
-Prepends projected visual tokens (256 × 4096) to text token embeddings
+Prepends projected visual tokens (256 × 3584) to text token embeddings
 and extends the attention mask accordingly.  Uses Linear + LayerNorm
 for the visual projection gate.
 """
@@ -19,8 +19,8 @@ class VisionLanguageFusion(nn.Module):
     Fuses visual and text embeddings by prepending visual tokens.
 
     Pipeline:
-        1. visual_tokens (batch, 256, 4096) → Linear → LayerNorm
-        2. Prepend to text_embeds (batch, seq_len, 4096)
+        1. visual_tokens (batch, 256, 3584) → Linear → LayerNorm
+        2. Prepend to text_embeds (batch, seq_len, 3584)
         3. Extend attention_mask to cover the extra 256 visual positions
 
     All trainable parameters live in the gate projection + LayerNorm.
@@ -28,7 +28,7 @@ class VisionLanguageFusion(nn.Module):
 
     def __init__(
         self,
-        hidden_size: int = 4096,
+        hidden_size: int = 3584,
         num_visual_tokens: int = 256,
     ) -> None:
         """

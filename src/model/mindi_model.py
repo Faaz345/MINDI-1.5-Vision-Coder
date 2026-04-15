@@ -47,7 +47,7 @@ class MINDI15(nn.Module):
 
     Components:
         - architecture: Qwen2.5-Coder-7B-Instruct + LoRA
-        - vision_encoder: CLIP ViT-L/14 (frozen) → 256 tokens × 4096
+        - vision_encoder: CLIP ViT-L/14 (frozen) → 256 tokens × 3584
         - fusion: Linear + LayerNorm prepend fusion
         - tokenizer: MINDI custom tokenizer with 22 special tokens
     """
@@ -56,7 +56,7 @@ class MINDI15(nn.Module):
         self,
         model_name: str = "Qwen/Qwen2.5-Coder-7B-Instruct",
         clip_model: str = "openai/clip-vit-large-patch14",
-        hidden_size: int = 4096,
+        hidden_size: int = 3584,
         num_visual_tokens: int = 256,
         tokenizer_path: Optional[Path] = None,
         device: Optional[str] = None,

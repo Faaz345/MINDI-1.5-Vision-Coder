@@ -255,7 +255,7 @@ def main() -> None:
     model = MINDI15(
         model_name=model_cfg.get("name", "Qwen/Qwen2.5-Coder-7B-Instruct"),
         clip_model=vision_cfg.get("clip_model", "openai/clip-vit-large-patch14"),
-        hidden_size=model_cfg.get("hidden_size", 4096),
+        hidden_size=model_cfg.get("hidden_size", 3584),
         num_visual_tokens=vision_cfg.get("visual_tokens", 256),
         torch_dtype=config.torch_dtype,
     )

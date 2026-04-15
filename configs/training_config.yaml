@@ -6,7 +6,7 @@
 # ── Model ──────────────────────────────────────────────────────
 model:
   name: "Qwen/Qwen2.5-Coder-7B-Instruct"
-  hidden_size: 4096
+  hidden_size: 3584
   dtype: "bf16"                   # bf16 required for MI300X stability (NOT fp16)
   use_compile: true               # torch.compile() works on ROCm
   gradient_checkpointing: true    # Save VRAM even with 192GB
@@ -31,7 +31,7 @@ lora:
 vision:
   clip_model: "openai/clip-vit-large-patch14"
   visual_tokens: 256              # 16×16 patches from ViT-L/14
-  projection_size: 4096           # Must match model.hidden_size
+  projection_size: 3584           # Must match model.hidden_size
   freeze_clip: true               # Freeze CLIP backbone
 
 # ── Training Phases ────────────────────────────────────────────
