@@ -55,16 +55,32 @@ class MINDIArchitecture:
     def _load_model(self) -> None:
         """Load the base model and tokenizer from HuggingFace or cache."""
         print(f"[MINDIArchitecture] Loading {self.model_name} ...")
+
+        if self.device == "cuda":
+            # Clear GPU state before loading
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            print(f"[MINDIArchitecture] GPU cleared, loading to CPU first ...")
+
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            cache_dir=str(self.cache_dir),
             torch_dtype=self.torch_dtype,
-            device_map="auto" if self.device == "cuda" else None,
+            device_map=None,
             trust_remote_code=True,
+            low_cpu_mem_usage=True,
         )
+        param_count = sum(p.numel() for p in self.model.parameters())
+        print(f"[MINDIArchitecture] CPU load done ({param_count / 1e9:.2f}B params)")
+
+        if self.device == "cuda":
+            print(f"[MINDIArchitecture] Moving to CUDA ...")
+            self.model = self.model.to("cuda")
+            torch.cuda.synchronize()
+            vram_gb = torch.cuda.memory_allocated() / (1024**3)
+            print(f"[MINDIArchitecture] CUDA transfer done ({vram_gb:.1f} GB VRAM)")
+
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
-            cache_dir=str(self.cache_dir),
             trust_remote_code=True,
         )
         print(f"[MINDIArchitecture] Loaded on {self.device} "
