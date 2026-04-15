@@ -68,8 +68,14 @@ training:
 
 # ── Data ───────────────────────────────────────────────────────
 data:
+  # Text-only code data (Phase 1 + Phase 3)
   train_file: "data/processed/train.jsonl"     # 4.18GB, 1,304,486 examples
   val_file: "data/processed/val.jsonl"         # 0.23GB, 72,471 examples
+
+  # Vision+code data — WebSight UI screenshots (Phase 2 + Phase 3)
+  vision_train_file: "data/websight/train.jsonl"
+  vision_val_file: "data/websight/val.jsonl"
+
   max_length: 4096
   shuffle_buffer: 10000           # Streaming shuffle buffer size
   num_workers: 4                  # DataLoader workers

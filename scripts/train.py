@@ -84,12 +84,12 @@ def build_training_config(raw: dict, dry_run: bool = False):
     # Build phase configs from YAML
     phases = []
     phase_defs = [
-        ("phase1", "phase1_lora", True, False, False),
-        ("phase2", "phase2_vision_bridge", False, True, True),
-        ("phase3", "phase3_all", True, True, True),
+        ("phase1", "phase1_lora", True, False, False, "text"),
+        ("phase2", "phase2_vision_bridge", False, True, True, "vision"),
+        ("phase3", "phase3_all", True, True, True, "mixed"),
     ]
     cumulative_step = 0
-    for key, name, lora, vision, fusion in phase_defs:
+    for key, name, lora, vision, fusion, data_type in phase_defs:
         pcfg = training.get(key, {})
         steps = pcfg.get("steps", 2500)
         if dry_run:
@@ -106,12 +106,15 @@ def build_training_config(raw: dict, dry_run: bool = False):
             lora=lora,
             vision_projection=vision,
             fusion=fusion,
+            data_type=data_type,
         ))
         cumulative_step = end
 
     config = TrainingConfig(
         train_file=PROJECT_ROOT / data.get("train_file", "data/processed/train.jsonl"),
         val_file=PROJECT_ROOT / data.get("val_file", "data/processed/val.jsonl"),
+        vision_train_file=PROJECT_ROOT / data.get("vision_train_file", "data/websight/train.jsonl"),
+        vision_val_file=PROJECT_ROOT / data.get("vision_val_file", "data/websight/val.jsonl"),
         output_dir=PROJECT_ROOT / output.get("checkpoint_dir", "checkpoints/training"),
         log_dir=PROJECT_ROOT / logging_cfg.get("log_dir", "logs/training"),
         max_seq_length=data.get("max_length", 4096),

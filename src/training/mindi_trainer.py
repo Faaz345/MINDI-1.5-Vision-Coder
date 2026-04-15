@@ -28,6 +28,7 @@ from typing import Any, Iterator, Optional
 
 import torch
 import torch.nn as nn
+from PIL import Image
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 from torch.utils.data import DataLoader, IterableDataset
@@ -50,6 +51,8 @@ class PhaseConfig:
     lora: bool = False
     vision_projection: bool = False
     fusion: bool = False
+    # Data type: "text" for code-only, "vision" for image+code, "mixed" for both
+    data_type: str = "text"
 
 
 @dataclass
@@ -59,6 +62,8 @@ class TrainingConfig:
     # Data paths
     train_file: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "processed" / "train.jsonl")
     val_file: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "processed" / "val.jsonl")
+    vision_train_file: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "websight" / "train.jsonl")
+    vision_val_file: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "websight" / "val.jsonl")
 
     # Output
     output_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "checkpoints" / "training")
@@ -93,18 +98,21 @@ class TrainingConfig:
             start_step=0, end_step=5000,
             learning_rate=2e-4, batch_size=16,
             lora=True, vision_projection=False, fusion=False,
+            data_type="text",
         ),
         PhaseConfig(
             name="phase2_vision_bridge",
             start_step=5000, end_step=7500,
             learning_rate=1e-5, batch_size=8,
             lora=False, vision_projection=True, fusion=True,
+            data_type="vision",
         ),
         PhaseConfig(
             name="phase3_all",
             start_step=7500, end_step=10000,
             learning_rate=5e-5, batch_size=12,
             lora=True, vision_projection=True, fusion=True,
+            data_type="mixed",
         ),
     ])
 
@@ -123,9 +131,11 @@ class StreamingJSONLDataset(IterableDataset):
     """
     Streams JSONL training data from disk line by line.
     Tokenizes on-the-fly to avoid loading 4+ GB into RAM.
+    Supports optional image loading for vision-code pairs.
 
     Expected JSONL format:
         {"id": "...", "type": "...", "source": "...",
+         "image_path": "data/websight/images/ws_0000001.jpg",   (optional)
          "messages": [{"role": "system", "content": "..."},
                       {"role": "user", "content": "..."},
                       {"role": "assistant", "content": "..."}],
@@ -139,12 +149,14 @@ class StreamingJSONLDataset(IterableDataset):
         max_length: int = 8192,
         shuffle_buffer: int = 10000,
         seed: int = 42,
+        project_root: Optional[Path] = None,
     ) -> None:
         self.file_path = Path(file_path)
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.shuffle_buffer = shuffle_buffer
         self.seed = seed
+        self.project_root = Path(project_root) if project_root else PROJECT_ROOT
 
         if not self.file_path.exists():
             raise FileNotFoundError(f"Training data not found: {self.file_path}")
@@ -212,7 +224,18 @@ class StreamingJSONLDataset(IterableDataset):
             rng.shuffle(buffer)
             yield from buffer
 
-    def __iter__(self) -> Iterator[dict[str, torch.Tensor]]:
+    def _load_image(self, image_path: str) -> Optional[Image.Image]:
+        """Load image from a relative path. Returns None if missing/corrupt."""
+        try:
+            full_path = self.project_root / image_path
+            if full_path.exists():
+                img = Image.open(str(full_path)).convert("RGB")
+                return img
+        except Exception:
+            pass
+        return None
+
+    def __iter__(self) -> Iterator[dict[str, Any]]:
         for example in self._shuffled_iterator():
             messages = example.get("messages", [])
             if not messages:
@@ -220,6 +243,12 @@ class StreamingJSONLDataset(IterableDataset):
             text = self._format_messages(messages)
             tokenized = self._tokenize(text)
             if tokenized is not None:
+                # Load image if path present
+                image_path = example.get("image_path")
+                if image_path:
+                    tokenized["image"] = self._load_image(image_path)
+                else:
+                    tokenized["image"] = None
                 yield tokenized
 
     def count_lines(self) -> int:
@@ -342,6 +371,17 @@ class MINDITrainer:
             shuffle_buffer=shuffle_buffer,
             seed=self.config.seed,
         )
+
+        def _collate_fn(batch):
+            """Custom collate: stack tensors, keep images as list."""
+            collated = {
+                "input_ids": torch.stack([b["input_ids"] for b in batch]),
+                "attention_mask": torch.stack([b["attention_mask"] for b in batch]),
+                "labels": torch.stack([b["labels"] for b in batch]),
+                "images": [b.get("image") for b in batch],
+            }
+            return collated
+
         return DataLoader(
             dataset,
             batch_size=batch_size,
@@ -349,6 +389,7 @@ class MINDITrainer:
             pin_memory=self.config.pin_memory,
             prefetch_factor=self.config.prefetch_factor if self.config.num_workers > 0 else None,
             drop_last=True,
+            collate_fn=_collate_fn,
         )
 
     def _log_metrics(self, metrics: dict) -> None:
@@ -380,12 +421,20 @@ class MINDITrainer:
             input_ids = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
             labels = batch["labels"].to(self.device)
+            images = batch.get("images")
+            image = None
+            if images:
+                for img in images:
+                    if img is not None:
+                        image = img
+                        break
 
             with torch.autocast(device_type="cuda", dtype=self.amp_dtype, enabled=self.use_amp):
                 result = self.model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     labels=labels,
+                    image=image,
                 )
 
             if result["loss"] is not None:
@@ -433,6 +482,7 @@ class MINDITrainer:
         print(f"  LR: {phase.learning_rate}  |  Batch: {phase.batch_size}")
         print(f"  Components: LoRA={phase.lora}, Vision={phase.vision_projection}, "
               f"Fusion={phase.fusion}")
+        print(f"  Data: {phase.data_type}")
         print("=" * 60)
 
         # Set trainable components
@@ -446,12 +496,21 @@ class MINDITrainer:
         optimizer = self._build_optimizer(phase)
         scheduler = self._build_scheduler(optimizer, phase)
 
+        # Select data files based on phase data_type
+        if phase.data_type == "vision":
+            train_file = self.config.vision_train_file
+            val_file = self.config.vision_val_file
+        else:
+            # "text" or "mixed" — use main data (mixed has images inline)
+            train_file = self.config.train_file
+            val_file = self.config.val_file
+
         # Build data loaders
         train_loader = self._build_dataloader(
-            self.config.train_file, phase.batch_size
+            train_file, phase.batch_size
         )
         val_loader = self._build_dataloader(
-            self.config.val_file, batch_size=max(phase.batch_size // 2, 1),
+            val_file, batch_size=max(phase.batch_size // 2, 1),
             shuffle_buffer=1000,
         )
 
@@ -475,6 +534,15 @@ class MINDITrainer:
             input_ids = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
             labels = batch["labels"].to(self.device)
+            images = batch.get("images")  # list of PIL Images or Nones
+
+            # Pick first non-None image in batch (model processes one image at a time)
+            image = None
+            if images:
+                for img in images:
+                    if img is not None:
+                        image = img
+                        break
 
             # Forward pass with mixed precision
             with torch.autocast(device_type="cuda", dtype=self.amp_dtype, enabled=self.use_amp):
@@ -482,6 +550,7 @@ class MINDITrainer:
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     labels=labels,
+                    image=image,
                 )
                 loss = result["loss"]
 
