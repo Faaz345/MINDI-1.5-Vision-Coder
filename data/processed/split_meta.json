@@ -1,0 +1,66 @@
+{
+  "total": 1449428,
+  "train_count": 1304486,
+  "val_count": 72471,
+  "test_count": 72471,
+  "train_pct": 90.0,
+  "val_pct": 5.0,
+  "test_pct": 5.0,
+  "seed": 42,
+  "source_breakdown": {
+    "codealpaca": {
+      "total": 59241,
+      "train": 53317,
+      "val": 2962,
+      "test": 2962
+    },
+    "codefeedback": {
+      "total": 149865,
+      "train": 134879,
+      "val": 7493,
+      "test": 7493
+    },
+    "evol_code": {
+      "total": 155998,
+      "train": 140398,
+      "val": 7800,
+      "test": 7800
+    },
+    "magicoder": {
+      "total": 149987,
+      "train": 134989,
+      "val": 7499,
+      "test": 7499
+    },
+    "sandbox_examples": {
+      "total": 9000,
+      "train": 8100,
+      "val": 450,
+      "test": 450
+    },
+    "search_examples": {
+      "total": 15000,
+      "train": 13500,
+      "val": 750,
+      "test": 750
+    },
+    "starcoderdata": {
+      "total": 569350,
+      "train": 512414,
+      "val": 28468,
+      "test": 28468
+    },
+    "synthetic_nextjs": {
+      "total": 90000,
+      "train": 81000,
+      "val": 4500,
+      "test": 4500
+    },
+    "websight": {
+      "total": 250987,
+      "train": 225889,
+      "val": 12549,
+      "test": 12549
+    }
+  }
+}

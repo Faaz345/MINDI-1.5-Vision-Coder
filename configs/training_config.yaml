@@ -1,57 +1,107 @@
 # ==========================================
 # MINDI 1.5 Vision-Coder — Training Configuration
+# Optimized for AMD MI300X 192GB VRAM
 # ==========================================
 
+# ── Model ──────────────────────────────────────────────────────
+model:
+  name: "Qwen/Qwen2.5-Coder-7B-Instruct"
+  hidden_size: 4096
+  dtype: "bf16"                   # bf16 required for MI300X stability (NOT fp16)
+  use_compile: true               # torch.compile() works on ROCm
+  gradient_checkpointing: true    # Save VRAM even with 192GB
+
+# ── LoRA ───────────────────────────────────────────────────────
+lora:
+  r: 64
+  alpha: 128
+  dropout: 0.05
+  bias: "none"
+  task_type: "CAUSAL_LM"
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+# ── Vision ─────────────────────────────────────────────────────
+vision:
+  clip_model: "openai/clip-vit-large-patch14"
+  visual_tokens: 256              # 16×16 patches from ViT-L/14
+  projection_size: 4096           # Must match model.hidden_size
+  freeze_clip: true               # Freeze CLIP backbone
+
+# ── Training Phases ────────────────────────────────────────────
 training:
-  # Hardware targets
-  local_device: "cuda"          # RTX 4060 8GB — for dev/testing only
-  cloud_device: "cuda"          # MI300X 192GB — for actual training
-  precision: "bf16"
-  
-  # Hyperparameters
-  epochs: 3
-  batch_size: 4
-  gradient_accumulation_steps: 8
-  effective_batch_size: 32      # batch_size * grad_accum
-  learning_rate: 2.0e-4
-  weight_decay: 0.01
-  warmup_ratio: 0.03
-  lr_scheduler: "cosine"
+  # Phase 1: LoRA only — teach coding patterns
+  phase1:
+    steps: 5000
+    lr: 2.0e-4
+    batch_size: 16                # MI300X can handle large batches
+    warmup_steps: 100
+    data_filter: "code_only"
+
+  # Phase 2: Vision bridge only — align visual tokens
+  phase2:
+    steps: 2500
+    lr: 1.0e-5
+    batch_size: 8                 # Smaller batch for vision bridge
+    warmup_steps: 50
+    data_filter: "websight_only"
+
+  # Phase 3: All trainable — joint fine-tuning
+  phase3:
+    steps: 2500
+    lr: 5.0e-5
+    batch_size: 12
+    warmup_steps: 50
+    data_filter: "all"
+
+  # Shared training settings
+  grad_accumulation: 4
   max_grad_norm: 1.0
+  eval_every: 250
+  save_every: 500
 
-  # Sequence settings
-  max_seq_length: 8192
-  packing: true                 # Pack short examples together
+# ── Data ───────────────────────────────────────────────────────
+data:
+  train_file: "data/processed/train.jsonl"     # 4.18GB, 1,304,486 examples
+  val_file: "data/processed/val.jsonl"         # 0.23GB, 72,471 examples
+  max_length: 4096
+  shuffle_buffer: 10000           # Streaming shuffle buffer size
+  num_workers: 4                  # DataLoader workers
+  pin_memory: true
+  prefetch_factor: 2
 
-  # Checkpointing
-  save_strategy: "steps"
-  save_steps: 500
-  save_total_limit: 5
-  checkpoint_dir: "./checkpoints"
-  resume_from_checkpoint: null
-
-  # Logging
-  logging_steps: 10
-  log_dir: "./logs/training"
-  report_to: "wandb"
-
-  # Evaluation
-  eval_strategy: "steps"
-  eval_steps: 250
-  eval_samples: 1000
-
-  # Memory optimization (for RTX 4060 local testing)
-  local_overrides:
-    batch_size: 1
-    gradient_accumulation_steps: 16
-    max_seq_length: 2048
-    gradient_checkpointing: true
-    optim: "adamw_8bit"
-
-wandb:
-  project: "mindi-1.5-vision-coder"
-  entity: "mindigenous"
+# ── Logging ────────────────────────────────────────────────────
+logging:
+  wandb_project: "mindi-1.5-vision-coder"
+  wandb_entity: "mindigenous"
+  log_every: 10                   # Log metrics every N steps
+  log_dir: "logs/training"
+  sample_every: 500               # Generate sample outputs every N steps
   tags:
     - "mindi-1.5"
     - "lora"
     - "vision-coder"
+    - "mi300x"
+
+# ── Output ─────────────────────────────────────────────────────
+output:
+  checkpoint_dir: "checkpoints/training"
+  best_model: "checkpoints/best"
+  hf_repo: "Mindigenous/MINDI-1.5-Vision-Coder"
+  push_every_phase: true
+
+# ── Local Dev Overrides (RTX 4060 8GB) ────────────────────────
+# Apply these when testing locally with --dry_run
+local_overrides:
+  batch_size: 1
+  gradient_accumulation_steps: 16
+  max_length: 2048
+  gradient_checkpointing: true
+  use_compile: false
+  num_workers: 0

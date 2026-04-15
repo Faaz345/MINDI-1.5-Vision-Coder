@@ -1,0 +1,54 @@
+{
+  "input_count": 1481497,
+  "kept_count": 1449428,
+  "rejected_count": 32069,
+  "kept_pct": 97.84,
+  "avg_tokens": 593.1,
+  "avg_quality": 6.487,
+  "total_tokens": 859694776,
+  "elapsed_seconds": 1023.6,
+  "filter_settings": {
+    "min_tokens": 50,
+    "max_tokens": 4096,
+    "min_quality": 5.0
+  },
+  "rejection_breakdown": {
+    "too_many_tokens": 30637,
+    "boilerplate_content": 1373,
+    "duplicate_content": 59
+  },
+  "source_kept": {
+    "codealpaca": 59241,
+    "codefeedback": 149865,
+    "websight": 250987,
+    "synthetic_nextjs": 90000,
+    "search_examples": 15000,
+    "sandbox_examples": 9000,
+    "starcoderdata": 569350,
+    "evol_code": 155998,
+    "magicoder": 149987
+  },
+  "source_rejected": {
+    "codealpaca": 741,
+    "codefeedback": 132,
+    "starcoderdata": 30650,
+    "evol_code": 518,
+    "magicoder": 13,
+    "websight": 15
+  },
+  "type_distribution": {
+    "code_generation": 1183441,
+    "vision_code": 250987,
+    "search": 15000
+  },
+  "language_distribution": {
+    "unknown": 490305,
+    "typescript": 375859,
+    "javascript": 298497,
+    "python": 211842,
+    "html": 36371,
+    "java": 32458,
+    "rust": 3709,
+    "go": 387
+  }
+}
