@@ -8,7 +8,7 @@ model:
   name: "Qwen/Qwen2.5-Coder-7B-Instruct"
   hidden_size: 3584
   dtype: "bf16"                   # bf16 required for MI300X stability (NOT fp16)
-  use_compile: true               # torch.compile() works on ROCm
+  use_compile: false              # Disabled — inductor eats ~130GB VRAM on ROCm
   gradient_checkpointing: true    # Save VRAM even with 192GB
 
 # ── LoRA ───────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ training:
   phase1:
     steps: 5000
     lr: 2.0e-4
-    batch_size: 16                # MI300X can handle large batches
+    batch_size: 8                 # Reduced from 16 (OOM with compile+logits)
     warmup_steps: 100
     data_filter: "code_only"
 
@@ -48,7 +48,7 @@ training:
   phase2:
     steps: 2500
     lr: 1.0e-5
-    batch_size: 8                 # Smaller batch for vision bridge
+    batch_size: 4                 # Reduced from 8 (vision needs more VRAM)
     warmup_steps: 50
     data_filter: "websight_only"
 
@@ -56,12 +56,12 @@ training:
   phase3:
     steps: 2500
     lr: 5.0e-5
-    batch_size: 12
+    batch_size: 6                 # Reduced from 12
     warmup_steps: 50
     data_filter: "all"
 
   # Shared training settings
-  grad_accumulation: 4
+  grad_accumulation: 8            # Doubled from 4 to keep effective batch size
   max_grad_norm: 1.0
   eval_every: 250
   save_every: 500
