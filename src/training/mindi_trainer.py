@@ -277,9 +277,8 @@ class MINDITrainer:
         # Optional torch.compile (works on ROCm)
         if config.use_compile:
             print("[MINDITrainer] Compiling model with torch.compile() ...")
-            self.model.architecture.peft_model = torch.compile(
-                self.model.architecture.peft_model
-            )
+            self.model.llm = torch.compile(self.model.llm)
+            self.model.architecture.peft_model = self.model.llm
             print("[MINDITrainer] Compilation complete")
 
         # Mixed precision scaler (bf16 doesn't need GradScaler, but keep structure)

@@ -111,6 +111,9 @@ class MINDI15(nn.Module):
         # Apply LoRA
         self.architecture.apply_lora()
 
+        # Register the LLM as a submodule so .parameters() finds it
+        self.llm = self.architecture.get_model()
+
         # 3. Vision encoder (frozen CLIP + trainable projection)
         self.vision_encoder = VisionEncoder(
             model_name=clip_model,
@@ -183,10 +186,8 @@ class MINDI15(nn.Module):
         Returns:
             Dict with 'loss', 'logits', and optionally 'visual_tokens'.
         """
-        model = self.architecture.get_model()
-
         # Get text embeddings from the LLM's embedding layer
-        text_embeds = model.get_input_embeddings()(input_ids)
+        text_embeds = self.llm.get_input_embeddings()(input_ids)
 
         # Encode vision if image provided
         visual_tokens = None
@@ -209,7 +210,7 @@ class MINDI15(nn.Module):
             labels = torch.cat([visual_labels, labels], dim=1)
 
         # Forward through LLM with embeddings (bypass tokenization)
-        outputs = model(
+        outputs = self.llm(
             inputs_embeds=fused_embeds,
             attention_mask=fused_mask,
             labels=labels,
@@ -257,8 +258,7 @@ class MINDI15(nn.Module):
         Returns:
             Generated text string (decoded with MINDI tokenizer).
         """
-        model = self.architecture.get_model()
-        model.eval()
+        self.llm.eval()
 
         # Tokenize with MINDI tokenizer
         inputs = self.tokenizer(prompt, return_tensors="pt")
@@ -267,11 +267,11 @@ class MINDI15(nn.Module):
 
         # If image provided, build fused embeddings
         if image is not None:
-            text_embeds = model.get_input_embeddings()(input_ids)
+            text_embeds = self.llm.get_input_embeddings()(input_ids)
             visual_tokens = self.vision_encoder.encode_image(image)
             fused_embeds, fused_mask = self.fusion(text_embeds, visual_tokens, attention_mask)
 
-            output_ids = model.generate(
+            output_ids = self.llm.generate(
                 inputs_embeds=fused_embeds,
                 attention_mask=fused_mask,
                 max_new_tokens=max_new_tokens,
@@ -284,7 +284,7 @@ class MINDI15(nn.Module):
             )
         else:
             # Text-only generation (direct input_ids)
-            output_ids = model.generate(
+            output_ids = self.llm.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 max_new_tokens=max_new_tokens,
