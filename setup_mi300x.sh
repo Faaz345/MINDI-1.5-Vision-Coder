@@ -1,13 +1,20 @@
 #!/bin/bash
 # ============================================================
 # MINDI 1.5 Vision-Coder — MI300X Setup Script
-# One command to set up everything on DigitalOcean AMD MI300X
+# Run INSIDE the Docker container on DigitalOcean AMD MI300X
+#
+# On the host first:
+#   docker exec -it rocm /bin/bash
+#   export HF_TOKEN=hf_your_token_here
+#   bash setup_mi300x.sh        (if already cloned)
+#   OR wget + bash               (if fresh)
 # ============================================================
 set -e
 
 echo "============================================================"
 echo "  MINDI 1.5 Vision-Coder — MI300X Setup"
 echo "  MINDIGENOUS.AI"
+echo "  (Docker container environment)"
 echo "============================================================"
 echo ""
 
@@ -18,10 +25,20 @@ if [ -z "$HF_TOKEN" ]; then
     exit 1
 fi
 
-# ── Step 1: Install ROCm PyTorch ───────────────────────────────
-echo "[1/7] Installing ROCm PyTorch (ROCm 6.0) ..."
-pip install torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/rocm6.0
+# ── Step 1: Verify PyTorch + ROCm (already in Docker image) ───
+echo "[1/7] Verifying PyTorch + ROCm (pre-installed in Docker) ..."
+python3 -c "
+import torch
+v = torch.__version__
+hip = torch.version.hip or 'None'
+print(f'  PyTorch: {v}')
+print(f'  ROCm/HIP: {hip}')
+assert torch.cuda.is_available(), 'No GPU detected!'
+print(f'  GPU: {torch.cuda.get_device_name(0)}')
+vram = torch.cuda.get_device_properties(0).total_mem / (1024**3)
+print(f'  VRAM: {vram:.0f} GB')
+print('  [OK] PyTorch + ROCm verified')
+"
 
 # ── Step 2: Get the full project from HF ──────────────────────
 echo ""
@@ -45,7 +62,7 @@ pip install wandb huggingface_hub accelerate
 # ── Step 4: Download training data from HF ─────────────────────
 echo ""
 echo "[4/7] Downloading training dataset ..."
-python -c "
+python3 -c "
 from huggingface_hub import snapshot_download
 import os
 
@@ -77,14 +94,14 @@ echo "  val.jsonl:   ${VAL_SIZE}"
 echo ""
 echo "[5/7] Setting environment variables ..."
 
-# ROCm / PyTorch settings
+# ROCm / PyTorch settings for MI300X
 export HSA_OVERRIDE_GFX_VERSION=11.0.0
 export PYTORCH_ROCM_ARCH="gfx942"
 export HIP_VISIBLE_DEVICES=0
 export TOKENIZERS_PARALLELISM=false
 export WANDB_PROJECT="mindi-1.5-vision-coder"
 
-# Create .env file
+# Create .env file for the project
 cat > .env << EOF
 HF_TOKEN=${HF_TOKEN}
 HSA_OVERRIDE_GFX_VERSION=11.0.0
@@ -93,31 +110,43 @@ HIP_VISIBLE_DEVICES=0
 TOKENIZERS_PARALLELISM=false
 WANDB_PROJECT=mindi-1.5-vision-coder
 EOF
-echo "  .env file created"
 
-# ── Step 6: Verify GPU detected ───────────────────────────────
+# Also add to bashrc so env persists across docker exec sessions
+grep -q "HSA_OVERRIDE_GFX_VERSION" ~/.bashrc 2>/dev/null || cat >> ~/.bashrc << 'ENVEOF'
+
+# MINDI 1.5 MI300X environment
+export HSA_OVERRIDE_GFX_VERSION=11.0.0
+export PYTORCH_ROCM_ARCH=gfx942
+export HIP_VISIBLE_DEVICES=0
+export TOKENIZERS_PARALLELISM=false
+export WANDB_PROJECT=mindi-1.5-vision-coder
+ENVEOF
+echo "  .env file created + bashrc updated"
+
+# ── Step 6: GPU stress test ────────────────────────────────────
 echo ""
-echo "[6/7] Verifying GPU ..."
-python -c "
+echo "[6/7] Running GPU verification + bf16 test ..."
+python3 -c "
 import torch
 print(f'  PyTorch version: {torch.__version__}')
 print(f'  CUDA available:  {torch.cuda.is_available()}')
 if torch.cuda.is_available():
     print(f'  GPU name:        {torch.cuda.get_device_name(0)}')
     vram = torch.cuda.get_device_properties(0).total_mem / (1024**3)
-    print(f'  VRAM:            {vram:.1f} GB')
+    print(f'  VRAM:            {vram:.0f} GB')
     print(f'  ROCm backend:    {torch.version.hip is not None}')
+    # bf16 matmul test
+    x = torch.randn(1000, 1000, dtype=torch.bfloat16, device='cuda')
+    y = torch.matmul(x, x.T)
+    print(f'  bf16 matmul:     PASSED (shape={y.shape})')
+    # Memory allocation test
+    big = torch.zeros(1024, 1024, 1024, dtype=torch.bfloat16, device='cuda')  # ~2GB
+    print(f'  2GB alloc test:  PASSED')
+    del big
+    torch.cuda.empty_cache()
 else:
-    print('  WARNING: No GPU detected!')
+    print('  ERROR: No GPU detected!')
     exit(1)
-"
-
-# Quick bf16 test
-python -c "
-import torch
-x = torch.randn(100, 100, dtype=torch.bfloat16, device='cuda')
-y = torch.matmul(x, x.T)
-print(f'  bf16 matmul test: PASSED (shape={y.shape})')
 "
 
 # ── Step 7: Create output directories ─────────────────────────
