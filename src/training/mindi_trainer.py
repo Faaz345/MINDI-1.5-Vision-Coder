@@ -302,6 +302,13 @@ class MINDITrainer:
             if hasattr(base_model, "gradient_checkpointing_enable"):
                 base_model.gradient_checkpointing_enable()
                 print("[MINDITrainer] Gradient checkpointing enabled")
+            # Required for PEFT/LoRA + gradient checkpointing without torch.compile
+            if hasattr(self.model.llm, "enable_input_require_grads"):
+                self.model.llm.enable_input_require_grads()
+            else:
+                def _make_inputs_require_grad(module, input, output):
+                    output.requires_grad_(True)
+                self.model.llm.get_input_embeddings().register_forward_hook(_make_inputs_require_grad)
 
         # Optional torch.compile (works on ROCm)
         if config.use_compile:
