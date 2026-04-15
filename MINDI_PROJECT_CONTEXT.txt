@@ -1,0 +1,359 @@
+============================================================
+MINDI 1.5 VISION-CODER — FULL PROJECT CONTEXT SUMMARY
+============================================================
+Last Updated: April 15, 2026
+Use this file to restore context in a new AI chat session.
+Paste this entire file as context when starting a new chat.
+============================================================
+
+PROJECT OVERVIEW
+================
+- Project: MINDI 1.5 Vision-Coder
+- Startup: MINDIGENOUS.AI
+- Goal: Fine-tune Qwen2.5-Coder-7B-Instruct into an agentic 
+  vision-capable coding AI with custom MINDI special tokens
+- Local Path: D:\Desktop 31st Jan 2026\MINDI 1.5 vision-coder\
+- Python: 3.11.9, local venv at project root
+- PyTorch: 2.6.0+cu124, transformers 4.40.0, peft 0.10.0
+
+
+REPOSITORIES
+============
+GitHub:     https://github.com/Faaz345/MINDI-1.5-Vision-Coder.git (master branch)
+HF Model:   Mindigenous/MINDI-1.5-Vision-Coder (private)
+HF Dataset:  Mindigenous/MINDI-1.5-training-data (private)
+
+Latest Git Commit: ff92c5a "Day 3 COMPLETE: Full model architecture"
+All 3 repos are fully synced as of April 15, 2026.
+
+
+GIT HISTORY
+===========
+ff92c5a  Day 3 COMPLETE: Full model architecture
+79f7022  Day 2 COMPLETE: 1.48M examples processed, 6GB dataset, WebSight done
+23c9987  Day 1 Complete: Tokenizer setup — Qwen2.5-Coder-7B base + 22 MINDI special tokens
+8eea373  feat: initial project scaffold for MINDI 1.5 Vision-Coder
+
+
+============================================================
+DAY 1 — TOKENIZER (COMPLETE)
+============================================================
+What was done:
+- Downloaded Qwen/Qwen2.5-Coder-7B-Instruct tokenizer as base
+- Added 22 MINDI special tokens for agentic capabilities
+- Final vocab size: 151,685
+- Saved to data/tokenizer/mindi_tokenizer/
+- Base preserved at data/tokenizer/base_tokenizer/
+
+22 MINDI Special Tokens:
+  <|mindi_start|> / <|mindi_end|>         — Main wrapper
+  <|thinking_start|> / <|thinking_end|>   — Chain-of-thought reasoning
+  <|file_start|> / <|file_end|>           — File path references
+  <|code_start|> / <|code_end|>           — Code blocks
+  <|critique_start|> / <|critique_end|>   — Self-critique
+  <|suggest_start|> / <|suggest_end|>     — Suggestions
+  <|search_start|> / <|search_end|>       — Web search queries
+  <|error_start|> / <|error_end|>         — Error handling
+  <|fix_start|> / <|fix_end|>             — Fix proposals
+  <|visual_start|> / <|visual_end|>       — Visual/image processing
+  <|sandbox_start|> / <|sandbox_end|>     — Code sandbox execution
+
+Scripts created:
+  scripts/download_tokenizer.py  — Downloads base Qwen tokenizer
+  scripts/add_special_tokens.py  — Adds 22 MINDI tokens
+  scripts/test_mindi_format.py   — Tests full MINDI format
+
+
+============================================================
+DAY 2 — DATASET PIPELINE (COMPLETE)
+============================================================
+What was done:
+- Downloaded 10 source datasets from HuggingFace
+- Processed all into unified JSONL chat format
+- Quality filtered (kept 1,449,428 of 1,480,850 = 97.9%)
+- Split into train/val/test (90/5/5)
+
+Raw Data Sources (data/raw/):
+  starcoder_python.jsonl     — StarCoder Python
+  starcoder_javascript.jsonl — StarCoder JavaScript  
+  starcoder_typescript.jsonl — StarCoder TypeScript
+  starcoder_css.jsonl        — StarCoder CSS
+  starcoder_html.jsonl       — StarCoder HTML
+  evol_code.jsonl            — EvolInstruct-Code
+  magicoder.jsonl            — Magicoder OSS-Instruct
+  codefeedback.jsonl         — CodeFeedback-Filtered
+  synthetic_nextjs.jsonl     — Synthetic Next.js/React
+  websight.jsonl             — WebSight (screenshot→HTML)
+
+Processed Data (data/processed/):
+  mindi_all.jsonl           — All combined (1,480,850 examples)
+  mindi_filtered.jsonl      — Quality filtered (1,449,428 examples, ~5GB)
+  mindi_rejected.jsonl      — Rejected examples
+  filter_report.json        — Filter statistics
+  train.jsonl               — Training split (1,304,486 examples, ~4.5GB)
+  val.jsonl                 — Validation split (72,471 examples, ~248MB)
+  test.jsonl                — Test split (72,471 examples, ~249MB)
+  split_meta.json           — Split metadata
+
+Message Format (each JSONL line):
+  {"messages": [
+    {"role": "system", "content": "You are MINDI..."},
+    {"role": "user", "content": "..."},
+    {"role": "assistant", "content": "..."}
+  ], "source": "...", "language": "..."}
+
+Scripts created:
+  scripts/download_datasets.py     — Downloads all 10 sources
+  scripts/process_data.py          — Processes into unified format
+  scripts/quality_filter.py        — Quality filtering (protects websight/synthetic)
+  scripts/split_data.py            — Train/val/test split
+  scripts/data_stats.py            — Dataset statistics
+  scripts/upload_everything_to_hf.py — Uploads everything to HuggingFace
+
+
+============================================================
+DAY 3 — MODEL ARCHITECTURE + TRAINING CODE (COMPLETE)
+============================================================
+
+BASE MODEL SPECS:
+  Model: Qwen/Qwen2.5-Coder-7B-Instruct
+  Parameters: 7.61B
+  Hidden size: 4096
+  Layers: 32
+  Attention heads: 32 (8 KV heads, GQA)
+  Context length: 32,768
+
+LoRA CONFIG:
+  Rank: 64
+  Alpha: 128
+  Dropout: 0.05
+  Target modules: q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj
+  Bias: none
+  Task type: CAUSAL_LM
+
+VISION ENCODER:
+  Model: openai/clip-vit-large-patch14 (CLIP ViT-L/14)
+  Backbone: Frozen (not trained)
+  Projection: Linear(1024 → 4096) — trainable
+  Output: 256 patch tokens at dim 4096
+
+FUSION:
+  Method: Prepend 256 visual tokens before text tokens
+  Gate: Linear(4096 → 4096) + LayerNorm(4096) — trainable
+  ~16.8M trainable parameters
+
+TRAINING (3-Phase on MI300X 192GB):
+  Phase 1: LoRA only, 5000 steps, LR 2e-4, batch 16, code_only data
+  Phase 2: Vision bridge, 2500 steps, LR 1e-5, batch 8, websight_only data
+  Phase 3: All components, 2500 steps, LR 5e-5, batch 12, all data
+  Precision: bf16 (NOT fp16 — AMD requirement)
+  Gradient accumulation: 4
+  Gradient clipping: max_norm=1.0
+  Optimizer: AdamW, betas=(0.9, 0.95)
+
+MI300X SPECIFICS:
+  GPU: AMD Instinct MI300X, 192GB VRAM
+  Platform: DigitalOcean
+  ROCm: 6.0 (presents as CUDA to PyTorch — torch.cuda.* works)
+  Env vars: HSA_OVERRIDE_GFX_VERSION=11.0.0, PYTORCH_ROCM_ARCH=gfx942
+  bf16 required (fp16 unstable on AMD MI300X)
+  torch.compile optional, gradient checkpointing enabled
+
+
+FILES CREATED/MODIFIED ON DAY 3:
+=================================
+
+File 1: src/model/architecture.py (CREATED ~210 lines)
+  - MINDIArchitecture class
+  - Loads Qwen2.5-Coder-7B-Instruct with bf16, device_map=auto
+  - Applies LoRA with peft (r=64, alpha=128)
+  - Methods: _load_model(), apply_lora(), get_trainable_params(), 
+    print_model_info(), save_lora(), load_lora(), resize_embeddings(), get_model()
+  - Has test block that validates loading + forward pass
+
+File 2: src/model/vision_encoder.py (REWRITTEN ~250 lines)
+  - VisionEncoder class
+  - Uses CLIPVisionModel + CLIPImageProcessor (not CLIPModel/CLIPProcessor)
+  - Frozen CLIP backbone, trainable Linear(1024→4096) projection
+  - encode_image() returns (1, 256, 4096) tensor or None
+  - encode_batch() handles mixed images/Nones in a batch
+  - encode_screenshot() for PIL images
+  - save/load_projection() for checkpoint management
+  - get_num_visual_tokens() returns 256
+
+File 3: src/model/fusion_layer.py (CREATED ~220 lines)
+  - VisionLanguageFusion class
+  - forward(text_embeds, visual_tokens, attention_mask) → (fused_embeds, fused_mask)
+  - Prepends 256 visual tokens before text embeddings
+  - Extends attention mask to include visual positions
+  - gate_proj Linear(4096,4096) + LayerNorm(4096)
+
+File 4: src/model/mindi_model.py (CREATED ~400+ lines)
+  - MINDI15 class — the complete model combining all components
+  - Uses MINDI custom tokenizer from data/tokenizer/mindi_tokenizer/
+  - forward() handles text-only and multimodal inputs
+  - Extends labels with -100 for visual token positions (no loss on images)
+  - generate() tokenizes with MINDI tokenizer, does fused embedding for images
+  - parse_output() extracts 8 section types via regex:
+    thinking, file, code, critique, suggest, search, error, fix
+    Returns dict[str, list[str]]
+  - set_trainable_components(lora, vision_projection, fusion) for phase switching
+  - save()/load() saves all 3 trainable components
+  - MINDI_SECTION_TOKENS dict maps section names to (start_token, end_token) pairs
+  - Test block: CPU tests (parse_output) + GPU tests (init, phases, forward, generate, save/load)
+
+File 5: src/training/mindi_trainer.py (CREATED ~500+ lines)
+  - TrainingConfig dataclass, PhaseConfig dataclass
+  - StreamingJSONLDataset (IterableDataset) — reads JSONL line-by-line
+    with 10K shuffle buffer, formats with tokenizer.apply_chat_template()
+  - MINDITrainer class
+  - train() runs all 3 phases, train_phase() runs single phase
+  - evaluate() computes validation loss
+  - _save_checkpoint() and resume_from_checkpoint()
+  - Per-phase: AdamW optimizer (betas 0.9/0.95), LinearLR warmup + CosineAnnealingLR
+  - DataLoader: num_workers=4, pin_memory=True, prefetch_factor=2
+  - Logs to JSONL, tracks best_val_loss, gradient clipping
+
+File 6: scripts/train.py (REWRITTEN — was a stub)
+  - Master training launch script
+  - parse_args(): --phase, --resume, --config, --dry_run, --push_to_hub, --no_wandb
+  - build_training_config() from YAML
+  - init_wandb(), push_checkpoint_to_hub()
+  - Signal handler: saves emergency checkpoint on Ctrl+C
+  - Crash handler: saves crash_checkpoint on unhandled exceptions
+  - Prints GPU info, final summary
+
+File 7: configs/training_config.yaml (REWRITTEN)
+  - Full MI300X training config
+  - Sections: model, lora, vision, training (3 phases), data, logging, output
+  - Phase 1: 5000 steps, lr 2e-4, batch 16, code_only
+  - Phase 2: 2500 steps, lr 1e-5, batch 8, websight_only
+  - Phase 3: 2500 steps, lr 5e-5, batch 12, all
+  - data: paths to train/val, max_length 4096, shuffle_buffer 10000
+  - output: hf_repo Mindigenous/MINDI-1.5-Vision-Coder, push_every_phase true
+
+File 8: setup_mi300x.sh (REWRITTEN)
+  - One-command MI300X setup for DigitalOcean
+  - 7 steps: ROCm PyTorch install, repo clone/pull (with HF_TOKEN auth), 
+    pip install, dataset download, env vars, GPU verify + bf16 test, output dirs
+  - Step 2 checks if already in repo (requirements.txt exists → git pull)
+    or fresh clone with https://Mindigenous:$HF_TOKEN@huggingface.co/...
+  - Final message: "Ready to train! Run: python scripts/train.py --phase 1"
+
+
+EXISTING FILES (from Day 0 scaffold, not modified):
+====================================================
+  src/model/code_model.py     — Old scaffold (not used by Day 3 code)
+  src/training/trainer.py     — Old scaffold (replaced by mindi_trainer.py)
+  src/training/dataset.py     — Old scaffold (replaced by StreamingJSONLDataset)
+  api/                        — API scaffold (to be built later)
+  frontend/                   — Frontend scaffold (to be built later)
+  tests/                      — Test scaffold
+  docs/                       — Documentation
+  src/agents/                 — Agent system (to be built)
+  src/search/                 — Search integration (to be built)
+  src/sandbox/                — Sandbox execution (to be built)
+  src/inference/              — Inference pipeline (to be built)
+  src/evaluation/             — Evaluation suite (to be built)
+
+
+FULL PROJECT STRUCTURE
+======================
+MINDI 1.5 vision-coder/
+├── .env                              — Secrets (git-ignored)
+├── .env.example                      — Template
+├── .gitignore
+├── README.md
+├── requirements.txt
+├── setup.py
+├── activate_mindi.bat
+├── setup_mi300x.sh                   — MI300X one-command setup
+├── configs/
+│   ├── model_config.yaml
+│   ├── training_config.yaml          — Full training config (Day 3)
+│   ├── data_config.yaml
+│   └── search_config.yaml
+├── scripts/
+│   ├── download_tokenizer.py         — Day 1
+│   ├── add_special_tokens.py         — Day 1
+│   ├── test_mindi_format.py          — Day 1
+│   ├── download_datasets.py          — Day 2
+│   ├── process_data.py               — Day 2
+│   ├── quality_filter.py             — Day 2
+│   ├── split_data.py                 — Day 2
+│   ├── data_stats.py                 — Day 2
+│   ├── upload_everything_to_hf.py    — Day 2
+│   ├── save_everything.py            — Day 2
+│   ├── train.py                      — Day 3 (master launcher)
+│   ├── health_check.py               — Scaffold
+│   ├── verify_install.py             — Scaffold
+│   └── validate_setup.py             — Scaffold
+├── src/
+│   ├── __init__.py
+│   ├── model/
+│   │   ├── __init__.py
+│   │   ├── architecture.py           — Day 3 (LoRA + Qwen loader)
+│   │   ├── vision_encoder.py         — Day 3 (CLIP ViT-L/14)
+│   │   ├── fusion_layer.py           — Day 3 (vision-language fusion)
+│   │   ├── mindi_model.py            — Day 3 (complete MINDI model)
+│   │   └── code_model.py             — Scaffold (unused)
+│   ├── training/
+│   │   ├── __init__.py
+│   │   ├── mindi_trainer.py          — Day 3 (3-phase trainer)
+│   │   ├── trainer.py                — Scaffold (unused)
+│   │   └── dataset.py                — Scaffold (unused)
+│   ├── agents/                       — To be built
+│   ├── search/                       — To be built
+│   ├── sandbox/                      — To be built
+│   ├── inference/                    — To be built
+│   ├── evaluation/                   — To be built
+│   └── utils/
+├── data/
+│   ├── raw/                          — 10 source JSONL files (~2.4GB total)
+│   ├── processed/                    — Filtered + split data (~10GB total)
+│   ├── tokenizer/
+│   │   ├── base_tokenizer/           — Original Qwen tokenizer
+│   │   └── mindi_tokenizer/          — Extended with 22 MINDI tokens
+│   └── knowledge_base/
+├── api/                              — To be built
+├── frontend/                         — To be built
+├── tests/                            — To be built
+├── docs/
+├── logs/
+└── checkpoints/
+
+
+API KEYS & ACCOUNTS (from .env)
+================================
+HuggingFace: Mindigenous account, token starts with hf_KK...
+WandB: mindigenous entity, mindi-1.5-vision-coder project
+Tavily: Web search API configured
+E2B: Cloud sandbox API configured
+
+
+WHAT COMES NEXT
+===============
+- Day 4+: Spin up DigitalOcean MI300X droplet
+- Run setup_mi300x.sh on the MI300X
+- Start training: python scripts/train.py --phase 1
+- Build agent system (src/agents/)
+- Build inference pipeline (src/inference/)
+- Build evaluation suite (src/evaluation/)
+- Build API layer (api/)
+- Build frontend (frontend/)
+
+
+IMPORTANT NOTES
+===============
+1. ROCm on MI300X presents as CUDA — torch.cuda.* works normally
+2. MUST use bf16 not fp16 on MI300X (fp16 unstable on AMD)
+3. The MINDI tokenizer (data/tokenizer/mindi_tokenizer/) is what the 
+   model uses, NOT the raw Qwen tokenizer
+4. WebSight and synthetic_nextjs are "protected sources" in quality 
+   filter — they bypass length requirements
+5. The streaming dataset reads JSONL line-by-line to handle large files
+6. All HuggingFace repos are PRIVATE
+7. .env is git-ignored — never committed
+============================================================
+END OF CONTEXT SUMMARY
+============================================================

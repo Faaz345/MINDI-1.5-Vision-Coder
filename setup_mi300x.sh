@@ -23,15 +23,14 @@ echo "[1/7] Installing ROCm PyTorch (ROCm 6.0) ..."
 pip install torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/rocm6.0
 
-# ── Step 2: Clone the full project from HF ────────────────────
+# ── Step 2: Get the full project from HF ──────────────────────
 echo ""
-echo "[2/7] Cloning MINDI 1.5 from HuggingFace ..."
-if [ -d "MINDI-1.5-Vision-Coder" ]; then
-    echo "  Directory exists — pulling latest ..."
-    cd MINDI-1.5-Vision-Coder
+echo "[2/7] Getting MINDI 1.5 from HuggingFace ..."
+if [ -f "requirements.txt" ]; then
+    echo "  Already in repo — pulling latest ..."
     git pull
 else
-    git clone https://${HF_TOKEN}@huggingface.co/Mindigenous/MINDI-1.5-Vision-Coder
+    git clone https://Mindigenous:${HF_TOKEN}@huggingface.co/Mindigenous/MINDI-1.5-Vision-Coder
     cd MINDI-1.5-Vision-Coder
 fi
 
