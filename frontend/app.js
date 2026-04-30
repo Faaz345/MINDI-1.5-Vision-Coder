@@ -431,8 +431,35 @@ Your token is stored only in this browser's local storage and sent as an \`Autho
     }
   }
 
+  // Build a Qwen-style history list from the current chat, EXCLUDING the
+  // user message that's about to be sent (which is `prompt` itself) and any
+  // in-flight loading placeholder. Capped to keep the request small.
+  function buildHistory() {
+    const chat = currentChat();
+    if (!chat) return [];
+    const msgs = chat.messages || [];
+    // Drop trailing loading messages and the most-recent user message,
+    // since send() already pushed it just before calling us.
+    let end = msgs.length;
+    while (end > 0 && msgs[end - 1].loading) end--;
+    if (end > 0 && msgs[end - 1].role === 'user') end--;
+    const slice = msgs.slice(Math.max(0, end - 20), end);
+    return slice
+      .filter((m) => (m.role === 'user' || m.role === 'assistant') && !m.loading)
+      .map((m) => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content : String(m.content || ''),
+      }))
+      .filter((m) => m.content.trim().length > 0);
+  }
+
   async function callGenerate(prompt, image, signal) {
     const base = state.apiUrl.replace(/\/$/, '');
+    const history = buildHistory();
+    // Gradio expects each input as its own positional element. We pass
+    // history as a JSON-encoded string because the backend's chat_fn input
+    // is a Textbox (not a JSON component) — _coerce_history() decodes it.
+    const historyJson = history.length ? JSON.stringify(history) : '';
 
     // Detect if this is a Gradio HF Space
     const isGradio = base.includes('hf.space') || base.includes('huggingface.co/spaces');
@@ -447,7 +474,7 @@ Your token is stored only in this browser's local storage and sent as an \`Autho
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
-          data: [prompt, image || null, state.temperature, state.maxTokens],
+          data: [prompt, image || null, state.temperature, state.maxTokens, historyJson],
         }),
         signal,
       });
@@ -510,7 +537,12 @@ Your token is stored only in this browser's local storage and sent as an \`Autho
 
     } else {
       // Direct REST API (Modal or custom)
-      const body = { prompt, temperature: state.temperature, max_tokens: state.maxTokens };
+      const body = {
+        prompt,
+        temperature: state.temperature,
+        max_tokens: state.maxTokens,
+        history,
+      };
       if (image) body.image = image;
       const res = await fetch(`${base}/api/generate`, {
         method: 'POST',

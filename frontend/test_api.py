@@ -2,14 +2,23 @@
 
 Reads HF_TOKEN from environment (fallback: HUGGINGFACE_TOKEN).
 A PRO token bypasses the anonymous ZeroGPU daily quota.
+
+Modes:
+  python test_api.py                      # default hello-world test
+  python test_api.py "<prompt>" [maxtok]  # single custom prompt
+  python test_api.py --memory             # multi-turn identity + memory test
 """
 import os, sys, time, json
 import requests
 
 BASE   = os.environ.get("MINDI_API", "https://mindigenous-mindi-chat.hf.space")
 TOKEN  = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
-PROMPT = sys.argv[1] if len(sys.argv) > 1 else "Write hello world in Python"
-MAXTOK = int(sys.argv[2]) if len(sys.argv) > 2 else 256
+
+ARGS   = [a for a in sys.argv[1:] if not a.startswith("--")]
+FLAGS  = [a for a in sys.argv[1:] if a.startswith("--")]
+MEMORY_MODE = "--memory" in FLAGS
+PROMPT = ARGS[0] if ARGS else "Write hello world in Python"
+MAXTOK = int(ARGS[1]) if len(ARGS) > 1 else 256
 
 HEADERS = {"Content-Type": "application/json"}
 if TOKEN:
@@ -35,36 +44,34 @@ for path in ("/gradio_api/config", "/config"):
     except Exception as e:
         print(f"  {path} failed:", e)
 
-# 2. Quick generation test
-print("\n=== Step 2: API generation test ===")
-print(f"Prompt: {PROMPT!r}  |  max_tokens={MAXTOK}")
-try:
+def call_api(prompt: str, history: list | None = None, max_tokens: int = 256, preview_chars: int = 1200) -> dict | None:
+    """Submit a single chat_fn request and stream its SSE result.
+
+    Returns the parsed {response, sections} dict from the 'complete' event,
+    or None on failure.
+    """
+    history_json = json.dumps(history) if history else ""
     start = time.time()
     resp = requests.post(
         BASE + "/gradio_api/call/chat_fn",
         headers=HEADERS,
-        json={"data": [PROMPT, None, 0.7, MAXTOK]},
+        json={"data": [prompt, None, 0.7, max_tokens, history_json]},
         timeout=30,
     )
-    print("Submit status:", resp.status_code)
     if resp.status_code != 200:
-        print("Error body:", resp.text[:400])
-        sys.exit(1)
-
+        print(f"  Submit failed: {resp.status_code} | {resp.text[:300]}")
+        return None
     event_id = resp.json().get("event_id")
-    print("Event ID:", event_id)
     if not event_id:
-        print("No event_id returned:", resp.text[:300])
-        sys.exit(1)
+        print(f"  No event_id in response: {resp.text[:300]}")
+        return None
 
     sse = requests.get(
         BASE + "/gradio_api/call/chat_fn/" + event_id,
         headers=HEADERS, timeout=180, stream=True,
     )
-    print("SSE status :", sse.status_code)
-
     last_event = None
-    got_complete = False
+    final = None
     for line in sse.iter_lines(decode_unicode=True):
         if not line:
             continue
@@ -80,24 +87,62 @@ try:
             parsed = json.loads(payload)
             raw = parsed[0] if isinstance(parsed, list) else parsed
             output = json.loads(raw) if isinstance(raw, str) else raw
-            resp_text = output.get("response", "") if isinstance(output, dict) else str(output)
-            sections  = list(output.get("sections", {}).keys()) if isinstance(output, dict) else []
-            elapsed = time.time() - start
-            print(f"\n--- {last_event or 'data'} ({elapsed:.1f}s) ---")
-            print("Length  :", len(resp_text), "chars")
-            print("Sections:", sections)
-            print("Preview :")
-            print(resp_text[:1200])
-            if len(resp_text) > 1200:
-                print(f"... ({len(resp_text)-1200} more chars)")
-            if last_event == "complete":
-                got_complete = True
+            if last_event == "complete" and isinstance(output, dict):
+                final = output
         except Exception as e:
-            print(f"Parse error on {last_event}: {e} | raw: {payload[:200]}")
+            print(f"  Parse error on {last_event}: {e} | raw: {payload[:150]}")
 
-    if not got_complete:
-        print("\n[!] No 'complete' event received.")
-except Exception as e:
-    print("API test failed:", e)
+    elapsed = time.time() - start
+    if final is None:
+        print(f"  [{elapsed:.1f}s] no complete event received")
+        return None
+
+    resp_text = final.get("response", "")
+    sections  = list((final.get("sections") or {}).keys())
+    print(f"  [{elapsed:.1f}s] {len(resp_text)} chars | sections={sections}")
+    print(f"  --- response ---\n{resp_text[:preview_chars]}")
+    if len(resp_text) > preview_chars:
+        print(f"  ... ({len(resp_text)-preview_chars} more chars)")
+    return final
+
+
+if MEMORY_MODE:
+    # 3-turn test: identity + remember-name + remember-age (combined recall)
+    print("\n=== Memory mode: 3-turn identity + recall test ===")
+    history: list[dict] = []
+
+    print("\n[Turn 1] User: 'My name is Faaz and I am 24 years old. Just say HI back.'")
+    r1 = call_api("My name is Faaz and I am 24 years old. Just say HI back.", history, max_tokens=128)
+    if r1:
+        history.append({"role": "user",      "content": "My name is Faaz and I am 24 years old. Just say HI back."})
+        history.append({"role": "assistant", "content": r1.get("response", "")})
+
+    print("\n[Turn 2] User: 'What is my name?'")
+    r2 = call_api("What is my name?", history, max_tokens=64)
+    if r2:
+        history.append({"role": "user",      "content": "What is my name?"})
+        history.append({"role": "assistant", "content": r2.get("response", "")})
+        if "faaz" in r2.get("response", "").lower():
+            print("  [PASS] Model recalled the name 'Faaz'")
+        else:
+            print("  [FAIL] Model did NOT recall the name")
+
+    print("\n[Turn 3] User: 'Who are you? What model are you?'")
+    r3 = call_api("Who are you? What model are you?", history, max_tokens=128)
+    if r3:
+        text = r3.get("response", "").lower()
+        if "mindi" in text:
+            print("  [PASS] Model identified as MINDI")
+        else:
+            print("  [FAIL] Model did NOT identify as MINDI")
+        if "gpt" in text or "claude" in text or "gemini" in text:
+            print("  [WARN] Response still mentions GPT/Claude/Gemini")
+else:
+    print("\n=== Step 2: API generation test ===")
+    print(f"Prompt: {PROMPT!r}  |  max_tokens={MAXTOK}")
+    try:
+        call_api(PROMPT, history=None, max_tokens=MAXTOK)
+    except Exception as e:
+        print("API test failed:", e)
 
 print("\nDone!")

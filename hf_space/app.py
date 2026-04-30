@@ -47,10 +47,16 @@ def parse_output(text: str) -> dict:
     return result
 
 
+_CHAT_TOKEN_PATTERN = re.compile(
+    r"<\|(?:im_start|im_end|endoftext|fim_prefix|fim_middle|fim_suffix|fim_pad|repo_name|file_sep)\|>"
+)
+
+
 def clean_output(text: str) -> str:
-    text = text.replace("<|im_end|>", "").replace("<|im_start|>", "")
-    text = re.sub(r"^(system|user|assistant)\n?", "", text).strip()
-    return text
+    """Strip Qwen chat-template artifacts and any leading role prefix."""
+    text = _CHAT_TOKEN_PATTERN.sub("", text)
+    text = re.sub(r"^\s*(system|user|assistant)\s*\n", "", text)
+    return text.strip()
 
 
 def download_checkpoint():
@@ -180,24 +186,61 @@ _ckpt_dir = download_checkpoint()
 load_tokenizer(_ckpt_dir)
 
 
+SYSTEM_MSG = (
+    "You are MINDI 1.5 Vision-Coder, an AI coding assistant created by MINDIGENOUS.AI.\n"
+    "Your name is MINDI (Mindigenous Intelligence). You are NOT GPT, GPT-4, ChatGPT, "
+    "Claude, Gemini, Llama, or Qwen. If asked who you are, who built you, or what model "
+    "you are, answer: 'I am MINDI 1.5 Vision-Coder, built by MINDIGENOUS.AI.'\n"
+    "Architecture: Qwen2.5-Coder-7B base, fine-tuned on 1.48M coding examples and 50K "
+    "UI/web screenshots, with a CLIP-Large vision encoder fused for image understanding.\n"
+    "Behavior:\n"
+    "- Generate complete, working code. Never use placeholders, TODOs, or 'add more here'.\n"
+    "- When given an image, describe what you see and use it to inform your code.\n"
+    "- Keep track of what the user told you earlier in the conversation.\n"
+    "- Be direct. Show code first, brief explanation after."
+)
+
+# Hard limits to keep prompt within Qwen-Coder's 8K context window.
+_MAX_HISTORY_TURNS = 20
+_MAX_HISTORY_CHARS = 12000
+
+
+def _build_prompt(prompt: str, history: list | None) -> str:
+    """Render the full chat-template string from system + history + new user msg."""
+    parts = [f"<|im_start|>system\n{SYSTEM_MSG}<|im_end|>"]
+
+    if history:
+        # Take last N turns and trim from the front if total chars too big.
+        trimmed = list(history)[-_MAX_HISTORY_TURNS:]
+        total = 0
+        kept: list[tuple[str, str]] = []
+        for turn in reversed(trimmed):
+            role = (turn or {}).get("role")
+            content = ((turn or {}).get("content") or "").strip()
+            if role not in ("user", "assistant") or not content:
+                continue
+            total += len(content)
+            if total > _MAX_HISTORY_CHARS:
+                break
+            kept.append((role, content))
+        for role, content in reversed(kept):
+            parts.append(f"<|im_start|>{role}\n{content}<|im_end|>")
+
+    parts.append(f"<|im_start|>user\n{prompt}<|im_end|>")
+    parts.append("<|im_start|>assistant\n")
+    return "\n".join(parts)
+
+
 @spaces.GPU(duration=60)
 def generate(prompt: str, image: Image.Image = None,
-             temperature: float = 0.7, max_tokens: int = 2048) -> str:
+             temperature: float = 0.7, max_tokens: int = 2048,
+             history: list | None = None) -> str:
     """Generate with full bf16 model. GPU allocated by ZeroGPU."""
 
     # Load model INSIDE the GPU function
     load_model_to_gpu(_ckpt_dir)
 
-    system_msg = (
-        "You are MINDI 1.5 Vision-Coder, an expert AI coding assistant. "
-        "When asked for code, respond with complete, working implementations. "
-        "Be concise and provide actual code, not descriptions."
-    )
-    formatted = (
-        f"<|im_start|>system\n{system_msg}<|im_end|>\n"
-        f"<|im_start|>user\n{prompt}<|im_end|>\n"
-        f"<|im_start|>assistant\n"
-    )
+    formatted = _build_prompt(prompt, history)
 
     inputs = TOKENIZER(formatted, return_tensors="pt").to("cuda")
 
@@ -241,18 +284,50 @@ def generate(prompt: str, image: Image.Image = None,
 
 # ── Gradio endpoint ─────────────────────────────────────
 
+def _coerce_history(raw) -> list | None:
+    """Accept history as list[dict], or JSON-string list, or None."""
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return None
+    if isinstance(raw, list):
+        return raw
+    return None
+
+
 def chat_fn(message: str, image: Image.Image = None,
-            temperature: float = 0.7, max_tokens: int = 2048) -> str:
-    """Exposed via Gradio API — wraps generate."""
+            temperature: float = 0.7, max_tokens: int = 2048,
+            history=None) -> str:
+    """Exposed via Gradio API — wraps generate.
+
+    `history` is a list of {"role": "user"|"assistant", "content": str} dicts,
+    typically the previous turns of this conversation. May also arrive as a
+    JSON-encoded string when called via the raw HTTP API.
+    """
     try:
-        response = generate(message, image, temperature, max_tokens)
+        hist = _coerce_history(history)
+        response = generate(message, image, temperature, max_tokens, hist)
         sections = parse_output(response)
         return json.dumps({"response": response, "sections": sections})
     except Exception as e:
         error_msg = str(e)
-        if "quota" in error_msg.lower() or "gpu" in error_msg.lower():
-            return json.dumps({"response": f"⚠️ GPU quota exceeded. Please try again later or reduce Max Tokens. Error: {error_msg}", "sections": {"error": [error_msg]}})
-        return json.dumps({"response": f"Error during generation: {error_msg}", "sections": {"error": [error_msg]}})
+        is_quota = (
+            "quota" in error_msg.lower()
+            or "zerogpu" in error_msg.lower()
+            or "unlogged user" in error_msg.lower()
+        )
+        if is_quota:
+            return json.dumps({
+                "response": f"⚠️ GPU quota exceeded. Please try again later or reduce Max Tokens. Error: {error_msg}",
+                "sections": {"error": [error_msg]},
+            })
+        return json.dumps({
+            "response": f"Error during generation: {error_msg}",
+            "sections": {"error": [error_msg]},
+        })
 
 
 # ── Gradio App ──────────────────────────────────────────
@@ -271,11 +346,17 @@ with gr.Blocks(title="MINDI 1.5 API", theme=gr.themes.Soft(
             max_tokens = gr.Slider(128, 4096, value=2048, step=128, label="Max Tokens")
             submit_btn = gr.Button("Generate", variant="primary")
 
+    history = gr.Textbox(
+        label="History (JSON list of {role, content})",
+        placeholder='[{"role":"user","content":"..."},{"role":"assistant","content":"..."}]',
+        lines=4,
+        value="",
+    )
     output = gr.Textbox(label="Response (JSON)", lines=20)
 
     submit_btn.click(
         fn=chat_fn,
-        inputs=[prompt, image, temperature, max_tokens],
+        inputs=[prompt, image, temperature, max_tokens, history],
         outputs=output,
     )
 
