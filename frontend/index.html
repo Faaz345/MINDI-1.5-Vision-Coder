@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="MINDI 1.5 Vision-Coder — generate production-ready code from text prompts and UI screenshots." />
+  <title>MINDI 1.5 — Vision-Coder AI</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Prism syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ============ AMBIENT BACKGROUND ============ -->
+  <div class="ambient" aria-hidden="true">
+    <div class="grid-pattern"></div>
+    <div class="blob blob--purple"></div>
+    <div class="blob blob--blue"></div>
+  </div>
+
+  <!-- Mobile sidebar scrim -->
+  <div class="scrim" id="scrim" aria-hidden="true"></div>
+
+  <!-- ============ APP SHELL ============ -->
+  <div class="app">
+
+    <!-- ============ LEFT SIDEBAR ============ -->
+    <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+      <div class="sidebar-head">
+        <button class="brand" id="brand" title="Double-click for settings" aria-label="MINDIGENOUS.AI brand — double-click for settings">
+          <span class="brand-mark">
+            <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="bgrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="#7c3aed" />
+                  <stop offset="100%" stop-color="#2563eb" />
+                </linearGradient>
+              </defs>
+              <path d="M16 2 L28 9 L28 23 L16 30 L4 23 L4 9 Z" fill="url(#bgrad)" />
+              <path d="M11.5 12 L7.5 16 L11.5 20 M20.5 12 L24.5 16 L20.5 20" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <circle cx="16" cy="16" r="1.6" fill="#fff" />
+            </svg>
+          </span>
+          <span class="brand-text">
+            <span class="brand-name">MINDIGENOUS<span class="brand-dot">.AI</span></span>
+            <span class="brand-version">MINDI 1.5 · Vision-Coder</span>
+          </span>
+        </button>
+      </div>
+
+      <div class="sidebar-actions">
+        <button class="btn btn--new" id="new-chat-btn" title="Start a new chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          New chat
+        </button>
+
+        <div class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input id="search" type="search" placeholder="Search conversations…" autocomplete="off" />
+        </div>
+      </div>
+
+      <nav class="chat-history" id="chat-history" aria-label="Chat history">
+        <div class="history-empty" id="history-empty">
+          <p>No chats yet.</p>
+          <p class="muted">Start a conversation to see it here.</p>
+        </div>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="status" id="status" title="Model status">
+          <span class="status-dot status-dot--gray" id="status-dot"></span>
+          <span class="status-text" id="status-text">Connecting…</span>
+        </div>
+        <a class="hf-link" href="https://huggingface.co/mindigenous-ai" target="_blank" rel="noopener noreferrer" title="MINDI on HuggingFace">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+          HuggingFace
+        </a>
+      </div>
+    </aside>
+
+    <!-- ============ CENTER: CHAT ============ -->
+    <main class="chat" id="chat">
+      <header class="chat-head">
+        <button class="icon-btn icon-btn--menu" id="hamburger" aria-label="Open sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <h1 class="chat-title" id="chat-title">New chat</h1>
+        <div class="chat-head-actions">
+          <button class="icon-btn" id="toggle-preview" aria-label="Toggle preview panel" title="Toggle preview panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+              <line x1="15" y1="3" x2="15" y2="21"></line>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Welcome screen -->
+      <section class="welcome" id="welcome">
+        <div class="welcome-icon" aria-hidden="true">
+          <svg viewBox="0 0 120 120" class="welcome-svg">
+            <defs>
+              <linearGradient id="wgrad" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#7c3aed" />
+                <stop offset="100%" stop-color="#2563eb" />
+              </linearGradient>
+              <filter id="wglow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="8" />
+              </filter>
+            </defs>
+            <path d="M60 10 L102 33 L102 87 L60 110 L18 87 L18 33 Z" fill="url(#wgrad)" filter="url(#wglow)" opacity=".55" />
+            <path d="M60 12 L100 34 L100 86 L60 108 L20 86 L20 34 Z" fill="url(#wgrad)" />
+            <path d="M44 50 L30 60 L44 70 M76 50 L90 60 L76 70" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+            <circle cx="60" cy="60" r="4.5" fill="#fff" />
+            <circle cx="60" cy="60" r="9" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="1.5" />
+          </svg>
+        </div>
+
+        <h2 class="welcome-title">Welcome to <span class="grad-text">MINDI 1.5</span></h2>
+        <p class="welcome-sub">A custom-trained 8B parameter Vision-Coder. Describe what you want to build, drop in a UI screenshot, and watch it generate production-ready code.</p>
+
+        <div class="quick-actions">
+          <button class="quick-card" data-prompt="Build a Next.js landing page with a responsive hero section, features grid, testimonial carousel, and a clear call-to-action. Use Tailwind CSS.">
+            <span class="qc-icon">🚀</span>
+            <h3>Landing Page</h3>
+            <p>Next.js + responsive hero section</p>
+          </button>
+          <button class="quick-card" data-prompt="Create a modern dashboard UI with a sidebar nav, top stats cards, a line chart, a recent activity table, and a user profile menu. Use HTML, CSS, and vanilla JS.">
+            <span class="qc-icon">📊</span>
+            <h3>Dashboard UI</h3>
+            <p>Charts, stats &amp; navigation</p>
+          </button>
+          <button class="quick-card" data-prompt="Write a FastAPI backend for a notes app with JWT authentication, PostgreSQL via SQLAlchemy, and CRUD endpoints. Include Pydantic models and an example .env.">
+            <span class="qc-icon">⚡</span>
+            <h3>API Backend</h3>
+            <p>FastAPI + JWT + PostgreSQL</p>
+          </button>
+          <button class="quick-card" data-prompt="Find and fix the bugs in this Python function. Explain each issue and provide the corrected code:&#10;&#10;```python&#10;def divide_list(numbers, divisor):&#10;    result = []&#10;    for n in numbers:&#10;        result.append(n / divisor)&#10;    return result&#10;```">
+            <span class="qc-icon">🔧</span>
+            <h3>Debug Code</h3>
+            <p>Find &amp; fix bugs in your code</p>
+          </button>
+        </div>
+      </section>
+
+      <!-- Messages -->
+      <section class="messages" id="messages" aria-live="polite"></section>
+
+      <!-- Composer (input) -->
+      <div class="composer-wrap">
+        <div class="composer" id="composer">
+          <div class="composer-images" id="composer-images" hidden></div>
+          <div class="composer-row">
+            <button class="composer-btn" id="attach-btn" title="Attach image" aria-label="Attach image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </button>
+            <textarea id="prompt-input" rows="1" placeholder="Describe the code you want to generate…" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+            <button class="composer-send" id="send-btn" disabled title="Send (Enter)" aria-label="Send message">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <p class="composer-foot">
+          <span class="grad-text">MINDI 1.5 Vision-Coder</span> · 8B params · Trained on code &amp; UI data
+        </p>
+      </div>
+
+      <input type="file" id="file-input" accept="image/*" hidden />
+    </main>
+
+    <!-- ============ RIGHT: PREVIEW PANEL ============ -->
+    <aside class="preview" id="preview" aria-label="Code preview panel">
+      <div class="preview-head">
+        <div class="tabs" role="tablist">
+          <button class="tab is-active" data-tab="code" role="tab" aria-selected="true">Code</button>
+          <button class="tab" data-tab="live" role="tab" aria-selected="false">Preview</button>
+          <button class="tab" data-tab="agent" role="tab" aria-selected="false">Agent</button>
+          <button class="tab" data-tab="sections" role="tab" aria-selected="false">Sections</button>
+        </div>
+        <div class="preview-actions">
+          <button class="icon-btn" id="copy-code" title="Copy code" aria-label="Copy code">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+          <button class="icon-btn" id="download-code" title="Download code" aria-label="Download code">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Code tab -->
+      <div class="preview-pane is-active" data-pane="code">
+        <div class="preview-empty" id="empty-code">
+          <div class="preview-empty-icon">{ }</div>
+          <p>Generated code will appear here</p>
+          <p class="muted">Send a prompt to see the last code block from the response.</p>
+        </div>
+        <pre class="code-out" id="code-out" hidden><code class="language-javascript" id="code-out-inner"></code></pre>
+      </div>
+
+      <!-- Live preview tab -->
+      <div class="preview-pane" data-pane="live">
+        <div class="preview-empty" id="empty-live">
+          <div class="preview-empty-icon">⚡</div>
+          <p>Live HTML preview</p>
+          <p class="muted">When the response contains an HTML code block, it'll render here in a sandboxed iframe.</p>
+        </div>
+        <iframe id="live-frame" sandbox="allow-scripts allow-same-origin" title="Live HTML preview" hidden></iframe>
+      </div>
+
+      <!-- Agent tab -->
+      <div class="preview-pane" data-pane="agent">
+        <div class="preview-empty" id="empty-agent">
+          <div class="preview-empty-icon">🤖</div>
+          <p>Agent Workspace</p>
+          <p class="muted">MINDI Agent will plan, generate, execute, verify, and fix code automatically. Steps appear here in real-time.</p>
+        </div>
+        <div class="agent-log" id="agent-log" hidden></div>
+        <div class="agent-sandbox" id="agent-sandbox" hidden></div>
+        <div class="agent-console" id="agent-console" hidden>
+          <div class="agent-console-head">Console Output</div>
+          <pre class="agent-console-body" id="agent-console-body"></pre>
+        </div>
+      </div>
+
+      <!-- Sections tab -->
+      <div class="preview-pane" data-pane="sections">
+        <div class="preview-empty" id="empty-sections">
+          <div class="preview-empty-icon">⌘</div>
+          <p>Parsed model sections</p>
+          <p class="muted">The model emits structured tokens — thinking, code, critique, fix, error, suggest, file. They'll show up here as colored cards.</p>
+        </div>
+        <div class="sections" id="sections" hidden></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ============ SETTINGS MODAL ============ -->
+  <div class="modal" id="settings-modal" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="document">
+      <div class="modal-head">
+        <h3 id="settings-title">Settings</h3>
+        <button class="icon-btn" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <label class="field">
+          <span class="field-label">API URL</span>
+          <input id="settings-url" type="url" placeholder="https://mindigenous-mindi-chat.hf.space" autocomplete="off" />
+          <span class="field-hint">Base URL for the MINDI API (HF Space or Modal). Endpoints are appended automatically.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">HuggingFace token <em class="field-value" id="hf-token-status">none</em></span>
+          <input id="settings-hf-token" type="password" placeholder="hf_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
+          <span class="field-hint">Paste a PRO HF token to bypass anonymous ZeroGPU quota. Stored only in this browser. <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">Get a token →</a></span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Temperature <em class="field-value" id="temp-val">0.7</em></span>
+          <input id="settings-temp" type="range" min="0" max="2" step="0.05" value="0.7" />
+          <span class="field-hint">Lower = more focused. Higher = more creative.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Max tokens <em class="field-value" id="tokens-val">2048</em></span>
+          <input id="settings-tokens" type="range" min="128" max="4096" step="128" value="2048" />
+          <span class="field-hint">Maximum length of the generated response.</span>
+        </label>
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn btn--ghost" data-close>Cancel</button>
+        <button class="btn btn--primary" id="save-settings">Save settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TOAST CONTAINER ============ -->
+  <div class="toasts" id="toasts" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Prism.js core + languages -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-jsx.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-tsx.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+
+  <script src="sandbox.js"></script>
+  <script src="agent.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
