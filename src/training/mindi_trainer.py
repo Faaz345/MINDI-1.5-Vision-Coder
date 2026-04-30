@@ -528,7 +528,10 @@ class MINDITrainer:
 
         self.model.train()
         phase_steps = phase.end_step - phase.start_step
-        step_in_phase = 0
+        step_in_phase = getattr(self, '_resume_step_offset', 0)
+        if step_in_phase > 0:
+            print(f"  [{phase.name}] Resuming from step {step_in_phase}/{phase_steps}")
+            self._resume_step_offset = 0  # Clear after use
         accum_loss = 0.0
         accum_count = 0
         phase_start_time = time.time()
@@ -679,6 +682,15 @@ class MINDITrainer:
         phase_summaries = []
 
         for phase in self.config.phases:
+            # Skip completed phases on resume
+            if self.global_step >= phase.end_step:
+                print(f"  Skipping {phase.name} (already completed, global_step={self.global_step})")
+                continue
+            # Resume mid-phase: calculate how many steps are already done
+            if self.global_step > phase.start_step:
+                done_in_phase = self.global_step - phase.start_step
+                self._resume_step_offset = done_in_phase
+                print(f"  Resuming {phase.name} at step {done_in_phase}/{phase.end_step - phase.start_step}")
             summary = self.train_phase(phase)
             phase_summaries.append(summary)
 
