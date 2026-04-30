@@ -77,6 +77,7 @@
   // Runtime-only state (not persisted)
   const runtime = {
     status:        'connecting',  // connecting | online | demo | offline
+    authBlocked:   false,         // true if last API call hit a quota/auth error
     pendingImages: [],            // [{name, dataUrl}]
     isSending:     false,
     lastCode:      null,          // {language, code}
@@ -348,7 +349,52 @@
     return null;
   }
 
+  // Build a friendly assistant message shown inline in the chat when the
+  // request is (or would be) blocked by the ZeroGPU quota / auth wall.
+  // ZeroGPU quota is per-user — there is no way to bypass it without a
+  // logged-in HF token. See https://huggingface.co/docs/hub/en/spaces-zerogpu
+  function makeAuthBlockedResponse() {
+    if (state.hfToken) {
+      return {
+        response:
+`**Your HF token hit its daily ZeroGPU quota.**
+
+ZeroGPU enforces a per-user GPU-time budget that resets every 24 hours after first use. Free HF accounts get a small daily allowance, **PRO accounts get 8\u00d7 more**, and PRO/Team/Enterprise can also top up with [pre-paid credits](https://huggingface.co/settings/billing) at \\$1 per 10 GPU-minutes.
+
+**What to do:**
+- Wait for the daily reset (24h after your first call today), **or**
+- Top up credits in your HF billing settings, **or**
+- Open **Settings** (double-click the MINDI logo) and paste a different PRO token.
+
+I'll keep further messages local until you update the token \u2014 sending them now would just hit the same wall.`,
+        sections: {},
+      };
+    }
+    return {
+      response:
+`**Sign-in needed to use the live model.**
+
+The MINDI 1.5 backend runs on HuggingFace ZeroGPU, which gives every IP a tiny anonymous quota (~3 minutes / day) before blocking further requests. That's why the first message worked but the next one didn't.
+
+**To unlock real generation:**
+1. Get a token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) (free account is fine; **PRO** gives 8\u00d7 more).
+2. **Double-click the MINDI logo** \u2192 paste the token in the *HuggingFace token* field \u2192 *Save settings*.
+3. Re-send your message.
+
+Your token is stored only in this browser's local storage and sent as an \`Authorization: Bearer\` header to the Space.`,
+      sections: {},
+    };
+  }
+
   async function pingHealth() {
+    // If a previous request was blocked by ZeroGPU quota / auth, stay in
+    // 'Auth required' until the user adds a token (applySettings clears it).
+    // Otherwise this would silently flip back to 'online' every 60s and the
+    // next user message would hit the same quota wall.
+    if (runtime.authBlocked) {
+      setStatus('demo', state.hfToken ? 'Quota exhausted' : 'Auth required');
+      return;
+    }
     if (!state.apiUrl) {
       setStatus('demo', 'Demo Mode');
       return;
@@ -1024,7 +1070,12 @@ console.log("MINDI 1.5 — awaiting connection");
 
     let result, errored = null;
     try {
-      if (runtime.status === 'demo' || !state.apiUrl) {
+      // If we already know auth is blocked, don't call the API again — the
+      // request would just consume more anonymous quota and return the same
+      // error. Show the inline 'add your token' card instead.
+      if (runtime.authBlocked) {
+        result = makeAuthBlockedResponse();
+      } else if (runtime.status === 'demo' || !state.apiUrl) {
         result = await generateDemo(text);
       } else {
         result = await callGenerate(text, imageForApi);
@@ -1041,11 +1092,16 @@ console.log("MINDI 1.5 — awaiting connection");
       runtime.isSending = false;
     }
 
-    // If the API returned a quota / auth error, surface it clearly
+    // If the API returned a quota / auth error, surface it clearly and
+    // stop calling the API on subsequent messages until the user adds a token.
     const authMsg = detectAuthError(result);
     if (authMsg) {
+      runtime.authBlocked = true;
       toast(authMsg, 'error', 7000);
       setStatus('demo', state.hfToken ? 'Quota exhausted' : 'Auth required');
+      // Replace the raw backend error with a friendlier inline card so the
+      // chat doesn't show a wall of quota-error text.
+      result = makeAuthBlockedResponse();
     }
 
     // Remove loading, push assistant
@@ -1176,14 +1232,19 @@ console.log("MINDI 1.5 — awaiting connection");
     const token  = els.settingsHfToken ? els.settingsHfToken.value.trim() : '';
     const temp   = parseFloat(els.settingsTemp.value);
     const tokens = parseInt(els.settingsTokens.value, 10);
+    const tokenChanged = token !== state.hfToken;
     state.apiUrl      = url || API_DEFAULT;
     state.hfToken     = token;
     state.temperature = isFinite(temp) ? temp : 0.7;
     state.maxTokens   = isFinite(tokens) ? tokens : 2048;
+    // If the user just saved a new (non-empty) token, give the API another shot.
+    if (tokenChanged && token) {
+      runtime.authBlocked = false;
+    }
     saveState();
     refreshTokenStatus();
     closeSettings();
-    toast('Settings saved', 'success');
+    toast(tokenChanged && token ? 'Token saved — retrying API' : 'Settings saved', 'success');
     pingHealth();
   }
 
@@ -1519,7 +1580,10 @@ console.log("MINDI 1.5 — awaiting connection");
     // Determine if this should use the agent
     const useAgent = typeof MINDIAgent !== 'undefined' && isCodeRequest(text);
 
-    if (!useAgent) {
+    // If we know auth is blocked, the agent loop would just call the API
+    // multiple times and fail every iteration. Fall back to send(), which
+    // now renders the friendly inline 'add your token' card instead.
+    if (!useAgent || runtime.authBlocked) {
       return send();
     }
 
