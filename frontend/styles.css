@@ -686,6 +686,28 @@ body.sidebar-open .scrim { opacity: 1; pointer-events: auto; }
   border-bottom: 1px solid var(--border);
 }
 .md-code-head span:first-child { color: var(--c-code); font-weight: 500; }
+.md-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.md-kind {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, .03);
+  cursor: help;
+}
+.md-kind--next    { color: #f8fafc; }
+.md-kind--react   { color: #60a5fa; }
+.md-kind--node    { color: #34d399; }
+.md-kind--html    { color: #fb923c; }
+.md-kind--snippet { color: var(--text-mute); }
 .md-code-actions {
   display: flex;
   gap: 6px;

@@ -344,6 +344,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 
+  <!-- StackBlitz SDK — drives the "Run in StackBlitz" launcher.
+       The form-POST /run endpoint is unreliable (gets silently rejected
+       and falls back to the default Next.js starter); the SDK's hidden
+       iframe handshake is the maintained, robust path. -->
+  <script src="https://unpkg.com/@stackblitz/sdk@1.11.0/bundles/sdk.umd.js"></script>
+
   <script src="sandbox.js"></script>
   <script src="agent.js"></script>
   <script src="app.js"></script>
