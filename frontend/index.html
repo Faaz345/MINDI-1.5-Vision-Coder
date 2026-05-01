@@ -297,6 +297,17 @@
           <span class="field-hint">Paste a PRO HF token to bypass anonymous ZeroGPU quota. Stored only in this browser. <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">Get a token →</a></span>
         </label>
 
+        <label class="field field-toggle">
+          <span class="field-toggle-row">
+            <span class="field-label">Vision input</span>
+            <span class="toggle">
+              <input id="settings-vision" type="checkbox" />
+              <span class="toggle-slider"></span>
+            </span>
+          </span>
+          <span class="field-hint">Send attached images to MINDI's CLIP encoder. <strong>Off by default</strong> — the current vision-language fusion is an early build and produces low-quality answers on images. Leave off until the next vision retraining ships. Attaching an image still records it in the chat.</span>
+        </label>
+
         <label class="field">
           <span class="field-label">Temperature <em class="field-value" id="temp-val">0.7</em></span>
           <input id="settings-temp" type="range" min="0" max="2" step="0.05" value="0.7" />

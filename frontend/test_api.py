@@ -8,7 +8,7 @@ Modes:
   python test_api.py "<prompt>" [maxtok]  # single custom prompt
   python test_api.py --memory             # multi-turn identity + memory test
 """
-import os, sys, time, json
+import os, sys, time, json, tempfile
 import requests
 
 BASE   = os.environ.get("MINDI_API", "https://mindigenous-mindi-chat.hf.space")
@@ -17,6 +17,7 @@ TOKEN  = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
 ARGS   = [a for a in sys.argv[1:] if not a.startswith("--")]
 FLAGS  = [a for a in sys.argv[1:] if a.startswith("--")]
 MEMORY_MODE = "--memory" in FLAGS
+VISION_MODE = "--vision" in FLAGS
 PROMPT = ARGS[0] if ARGS else "Write hello world in Python"
 MAXTOK = int(ARGS[1]) if len(ARGS) > 1 else 256
 
@@ -44,18 +45,42 @@ for path in ("/gradio_api/config", "/config"):
     except Exception as e:
         print(f"  {path} failed:", e)
 
-def call_api(prompt: str, history: list | None = None, max_tokens: int = 256, preview_chars: int = 1200) -> dict | None:
+def upload_image(path: str) -> dict | None:
+    """POST an image to /gradio_api/upload and return the FileData reference."""
+    if not os.path.exists(path):
+        print(f"  [upload] file not found: {path}")
+        return None
+    upload_headers = {k: v for k, v in HEADERS.items() if k.lower() != "content-type"}
+    with open(path, "rb") as fh:
+        files = {"files": (os.path.basename(path), fh, "image/png")}
+        resp = requests.post(BASE + "/gradio_api/upload", headers=upload_headers, files=files, timeout=30)
+    if resp.status_code != 200:
+        print(f"  [upload] {resp.status_code}: {resp.text[:200]}")
+        return None
+    body = resp.json()
+    file_path = body[0] if isinstance(body, list) else None
+    if not file_path:
+        print(f"  [upload] unexpected: {body}")
+        return None
+    return {"path": file_path, "meta": {"_type": "gradio.FileData"}, "orig_name": os.path.basename(path)}
+
+
+def call_api(prompt: str, history: list | None = None, max_tokens: int = 256,
+             preview_chars: int = 1200, image_path: str | None = None) -> dict | None:
     """Submit a single chat_fn request and stream its SSE result.
 
     Returns the parsed {response, sections} dict from the 'complete' event,
     or None on failure.
     """
     history_json = json.dumps(history) if history else ""
+    image_arg = upload_image(image_path) if image_path else None
+    if image_path:
+        print(f"  [vision] uploaded {image_path} -> {image_arg.get('path') if image_arg else 'FAILED'}")
     start = time.time()
     resp = requests.post(
         BASE + "/gradio_api/call/chat_fn",
         headers=HEADERS,
-        json={"data": [prompt, None, 0.7, max_tokens, history_json]},
+        json={"data": [prompt, image_arg, 0.7, max_tokens, history_json]},
         timeout=30,
     )
     if resp.status_code != 200:
@@ -137,6 +162,35 @@ if MEMORY_MODE:
             print("  [FAIL] Model did NOT identify as MINDI")
         if "gpt" in text or "claude" in text or "gemini" in text:
             print("  [WARN] Response still mentions GPT/Claude/Gemini")
+elif VISION_MODE:
+    # Vision pipeline test — upload a tiny synthetic PNG and ask MINDI
+    # to describe it. Verifies the /gradio_api/upload + chat_fn(image=...) path.
+    print("\n=== Vision mode: image upload + describe test ===")
+    img_path = ARGS[0] if ARGS else os.path.join(tempfile.gettempdir(), "mindi_test_dot.png")
+    if not os.path.exists(img_path):
+        try:
+            from PIL import Image, ImageDraw
+            img = Image.new("RGB", (256, 256), color=(20, 20, 30))
+            d = ImageDraw.Draw(img)
+            d.rectangle((40, 40, 216, 216), outline=(120, 80, 255), width=4)
+            d.ellipse((96, 96, 160, 160), fill=(255, 200, 80))
+            img.save(img_path)
+            print(f"[vision] generated synthetic test image at {img_path}")
+        except Exception as e:
+            print(f"[vision] could not synthesize test image (need Pillow): {e}")
+            sys.exit(1)
+
+    prompt = ARGS[1] if len(ARGS) > 1 else "Describe this image in one sentence."
+    r = call_api(prompt, history=None, max_tokens=128, image_path=img_path)
+    if r:
+        text = (r.get("response") or "").lower()
+        # Loose checks: did the model engage with image content at all?
+        cues = ["circle", "square", "rectangle", "yellow", "purple", "ellipse", "image", "shape"]
+        hits = [c for c in cues if c in text]
+        if hits:
+            print(f"  [PASS] response mentions visual cues: {hits}")
+        else:
+            print("  [WARN] response does not seem image-aware")
 else:
     print("\n=== Step 2: API generation test ===")
     print(f"Prompt: {PROMPT!r}  |  max_tokens={MAXTOK}")

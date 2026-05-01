@@ -50,12 +50,25 @@ def parse_output(text: str) -> dict:
 _CHAT_TOKEN_PATTERN = re.compile(
     r"<\|(?:im_start|im_end|endoftext|fim_prefix|fim_middle|fim_suffix|fim_pad|repo_name|file_sep)\|>"
 )
+# Match a role line ONLY if it stands alone at the very start of the text
+# followed by an explicit newline. The previous '\s*' wildcard could swallow
+# leading content when the model emitted weird sequences in the vision path.
+_ROLE_PREFIX_PATTERN = re.compile(r"^(?:system|user|assistant)\n")
 
 
 def clean_output(text: str) -> str:
     """Strip Qwen chat-template artifacts and any leading role prefix."""
+    if os.environ.get("MINDI_DEBUG_RAW") == "1":
+        print(f"[clean_output] RAW ({len(text)} chars): {text!r}")
     text = _CHAT_TOKEN_PATTERN.sub("", text)
-    text = re.sub(r"^\s*(system|user|assistant)\s*\n", "", text)
+    # Apply role-prefix strip up to twice: handles the vision-path case where
+    # the model occasionally emits 'assistant\n' followed by stray noise like
+    # an extra 'user\n' before the real reply.
+    for _ in range(2):
+        new_text = _ROLE_PREFIX_PATTERN.sub("", text, count=1)
+        if new_text == text:
+            break
+        text = new_text
     return text.strip()
 
 
