@@ -1,40 +1,37 @@
 # MINDI 1.5 Vision-Coder
 
-**Built by [MINDIGENOUS.AI](https://mindigenous.ai)**
-
-**Builder:** Faaz ([@Mindigenous](https://huggingface.co/Mindigenous) on HuggingFace)
-
-**Started:** April 14, 2026
-
-**Target Launch:** May 5, 2026
+**Built by [MINDIGENOUS.AI](https://mindigenous.ai)**  
+**Builder:** Faaz ([@Mindigenous](https://huggingface.co/Mindigenous) on HuggingFace)  
+**Started:** April 14, 2026 | **Training Complete:** April 28, 2026 | **Frontend v2:** May 2, 2026
 
 ---
 
 ## What is MINDI 1.5?
 
-MINDI 1.5 Vision-Coder is a multimodal agentic AI coding model that:
+MINDI 1.5 Vision-Coder is a multimodal AI model that generates frontend code (HTML/CSS/JS, React, Next.js, Tailwind) from text prompts and UI screenshots.
 
-- Generates production-ready Next.js 14 + Tailwind CSS + TypeScript code
-- Sees its own output via vision capabilities (CLIP ViT-L/14)
-- Critiques its own UI/UX design and iterates
-- Searches the internet for latest packages and documentation
-- Tests code in an isolated sandbox environment
-- Fixes its own errors automatically
-- Suggests improvements to the user
+- **Architecture:** Qwen2.5-Coder-7B-Instruct + LoRA + CLIP ViT-L/14 + Vision-Language Fusion
+- **Training:** 10,000 steps across 3 phases on AMD MI300X 192GB
+- **Live API:** [Mindigenous/mindi-chat](https://huggingface.co/spaces/Mindigenous/mindi-chat) on HuggingFace Spaces
 
-## Architecture
+## Frontend — AI Website Builder
 
-- **Base Model:** Open-source coding model (3B-7B parameters, Apache 2.0 / MIT)
-- **Fine-tuning:** LoRA on AMD MI300X 192GB VRAM
-- **Vision Encoder:** CLIP ViT-L/14
-- **Agents:** Search + Sandbox + UI Critic + Code Generation
-- **Training Data:** 500,000+ curated examples
-- **Backend:** FastAPI
-- **Output Format:** Next.js 14 + Tailwind CSS + TypeScript
+A professional 3-panel IDE (Bolt.new-style) for interacting with MINDI:
+
+```powershell
+cd frontend
+npm install
+npm run dev   # → http://localhost:5173
+```
+
+Features: Plan modal, prompt enhancement, code animation, live preview, file tree, demo fallback.  
+**Read `context.md` for full architecture and next steps.**
 
 ## HuggingFace
 
-Final model will be published at: `Mindigenous/MINDI-1.5-Vision-Coder`
+- **Model:** `Mindigenous/MINDI-1.5-Vision-Coder` (private)
+- **Dataset:** `Mindigenous/MINDI-1.5-training-data` (private)
+- **Space:** `Mindigenous/mindi-chat` (live, ZeroGPU)
 
 ## License
 
