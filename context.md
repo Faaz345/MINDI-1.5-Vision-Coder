@@ -1,6 +1,7 @@
 # MINDI 1.5 Vision-Coder — Complete Project Context
 
-> **Last updated:** May 2, 2026 (Session 5)
+> **Last updated:** May 9, 2026 (Session 7)
+> **CRITICAL FINDING:** Model checkpoints are MISSING from HuggingFace (confirmed via API scan).
 > **Purpose:** This file contains ALL context needed to continue development with any AI assistant.
 > It covers architecture decisions, errors encountered, fixes applied, training state, frontend state, and exact next steps.
 
@@ -39,12 +40,23 @@ All 3 phases of MINDI 1.5 Vision-Coder training are COMPLETE:
 
 **Final loss:** 0.25–0.40 range  
 **VRAM:** 17.2 GB on A100-40GB  
-**All checkpoints:** Uploaded to `checkpoints/` in HF model repo
+**All checkpoints:** ❌ **MISSING** — NOT uploaded to HF model repo (confirmed 2026-05-09 via `huggingface_hub.list_repo_files()`). The repo has 107 files but ZERO checkpoint files (no `.safetensors`, `.pt`, `.bin`).
 
-### HuggingFace Checkpoints (Mindigenous/MINDI-1.5-Vision-Coder)
-- Phase 1: 16 checkpoints (step250 → step5000)
-- Phase 2: 10 checkpoints (step250 → step2500)
-- Phase 3: `phase3_all_step500`, `step1000`, `step1500`, `step2000`, `phase3_all_step2500_final`, `phase3_final`
+### Where checkpoints MIGHT still be
+- AMD GPU Droplet (`165.245.141.245`) — ❓ **UNKNOWN, being investigated**
+- Modal volume (`mindi-data`) — ❓ Likely wiped (upload script exists but checkpoints never reached HF)
+- Local Windows machine — ❌ Confirmed empty (searched all `.safetensors`, `.pt`, `.bin`)
+
+### Recovery plan
+1. Check AMD droplet for checkpoint files (run `scripts/check_droplet_for_ckpts.sh`)
+2. If found, use `scripts/restore_checkpoints_from_droplet.py` to upload to HF
+3. If NOT found, must retrain from dataset repo (data is safe: 52,532 files on HF dataset repo)
+
+### Previous (FALSE) claim
+The following was believed to be true but has been disproven:
+- ~~Phase 1: 16 checkpoints (step250 → step5000)~~ — NOT on HF
+- ~~Phase 2: 10 checkpoints (step250 → step2500)~~ — NOT on HF
+- ~~Phase 3: `phase3_all_step500`, `step1000`, `step1500`, `step2000`, `phase3_all_step2500_final`, `phase3_final`~~ — NOT on HF
 
 ---
 
@@ -175,6 +187,12 @@ frontend/
 
 7. **Settings** — Click the MINDI logo (top-left) to open Settings: configure API URL, HF Token, Temperature, Max Tokens.
 
+8. **Advanced IDE Controls** (Added in Session 6):
+   - **Syntax Highlighting**: Prism-style token coloring for keywords, tags, strings, and comments.
+   - **Viewport Switcher**: Responsive testing with Desktop, Tablet, and Mobile views.
+   - **Download Project**: JSZip-powered export of all generated files as a ZIP archive.
+   - **Optimized Rendering**: Memoized line rendering to handle large code streams without crashing.
+
 ### Error Handling in api.js
 
 ```javascript
@@ -229,11 +247,31 @@ MINDI-1.5-Vision-Coder/
 ├── hf_space/
 │   ├── app.py                    # Gradio Space — live at Mindigenous/mindi-chat
 │   └── requirements.txt
-├── frontend/                     # ⭐ NEW: Vite + React website builder
+├── frontend/                     # ⭐ Vite + React website builder (Session 5)
 │   ├── index.html
 │   ├── package.json
 │   ├── _legacy/                  # Old vanilla JS chat (backup)
 │   └── src/                      # (see Section 4 above)
+├── frontend-react/               # ⭐⭐ MINDIGENOUS 2.0 (Active Dev Target)
+│   ├── index.html                # Vite + React 19 + Tailwind + TypeScript
+│   ├── package.json              # framer-motion, lucide-react, supabase-js
+│   ├── vite.config.js            # Proxy to localhost:8000 (remove when wiring to HF)
+│   ├── DESIGN.md                 # Cybernetic design system spec
+│   ├── src/
+│   │   ├── App.jsx               # Main app with VercelV0Chat, auth, agent stream
+│   │   ├── main.jsx              # React entry with AuthProvider
+│   │   ├── styles.css            # Tailwind + custom dark theme
+│   │   ├── components/
+│   │   │   ├── auth/             # AuthModal, AuthForm, AuthProvider (Supabase)
+│   │   │   └── ui/               # v0-ai-chat.tsx, textarea.tsx
+│   │   ├── hooks/
+│   │   │   ├── useAgentStream.ts # streamWorkflow → HF Space adapter needed
+│   │   │   └── useAuthModal.ts   # Auth modal state
+│   │   └── lib/
+│   │       ├── mindiApi.ts       # Local /api/* calls → replace with HF Space
+│   │       ├── cloudData.ts      # Supabase projects/profiles
+│   │       └── supabase.ts       # Supabase client
+│   └── CODEX_WIREUP_PROMPT.md    # Instructions for wiring to HF Space API
 ├── api/                          # FastAPI endpoints (future)
 ├── modal_api.py                  # Modal.com A100 API server
 ├── modal_train.py                # Modal.com training script
@@ -341,6 +379,8 @@ gr.Interface(
 | 6.14 | Health check misdetects Space as offline | Use `fetch(base, {mode:'no-cors'})` for HF Spaces |
 | 6.15 | GPU quota blocks demo — no fallback | `isQuotaError()` + `isQuotaException()` → auto demo |
 | 6.16 | handlePlanSubmit catch had no demo fallback | Added demo fallback to all catch blocks in App.jsx |
+| 6.17 | Editor crash during streaming | O(n²) rendering fixed via memoized CodeLine component |
+| 6.18 | Syntax highlighter tag corruption | Fixed via multi-pass tokenization approach |
 
 ---
 
@@ -352,7 +392,8 @@ gr.Interface(
 | 2 | April 16, 2026 | Phase 1 training 0→4250. WebSight data uploaded. |
 | 3 | April 19–28, 2026 | Phase 1→2→3 complete. Model deployed to HF Space. |
 | 4 | April 30, 2026 | Fixed Gradio API protocol. HF token auth. ZeroGPU quota handling. Agent scaffolded. |
-| 5 | May 2, 2026 | **Rebuilt frontend as Vite+React 3-panel IDE.** Prompt enhancer, plan modal, code animation, live preview, file tree, demo fallback. |
+| 5 | May 2, 2026 (AM) | Rebuilt frontend as Vite+React 3-panel IDE. Prompt enhancer, plan modal, code animation, live preview, file tree, demo fallback. |
+| 6 | May 2, 2026 (PM) | **Finalized IDE features.** Added syntax highlighting, viewport switcher, ZIP download, and performance optimizations. Verified end-to-end flow. |
 
 ---
 
@@ -367,24 +408,25 @@ gr.Interface(
    - Code animation (line-by-line fade-in)
    - File tree (real-time population during generation)
    - Live preview (always-visible iframe)
+   - **Syntax highlighting** (Prism-style colors)
+   - **Viewport Switcher** (Desktop/Tablet/Mobile)
+   - **ZIP Project Download** (via JSZip)
    - Demo fallback (landing page + dashboard demos)
    - Settings modal (API URL, HF token, temperature)
    - ZeroGPU quota detection + auto-fallback
-4. **Build** — `npm run build` → 222KB JS (70KB gzip), 3.25s
+4. **Build** — `npm run build` → 225KB JS (71KB gzip), 0.5s
 
 ---
 
 ## 11. WHAT REMAINS ❌
 
 ### High Priority
-1. **Add HF token to Settings** — Without token, demo fallback always used. Real MINDI output requires `hf_...` token in Settings modal.
-2. **Make suggestion pills clickable** — "Landing Page", "Dashboard" etc. chips on welcome screen should trigger generation when clicked.
-3. **Syntax highlighting** — Add Prism.js token coloring to the code editor.
+1. **Vision loop** — Feed preview screenshots back to MINDI for automated visual QA (captureScreenshot → base64 → callMINDI).
+2. **Multi-file support** — Model generates single-file HTML currently. Add prompt instruction for `// filename:` markers to split into HTML/CSS/JS.
 
 ### Medium Priority
-4. **Vision loop** — Feed preview screenshots back to MINDI for automated visual QA (captureScreenshot → base64 → callMINDI).
-5. **Multi-file support** — Model generates single-file HTML currently. Add prompt instruction for `// filename:` markers to split into HTML/CSS/JS.
-6. **Download project button** — Let user download generated files as a ZIP.
+3. **WebContainer SDK** — For projects that need Node.js execution (Next.js, npm packages).
+4. **Fine-tuning for multi-file output** — Train on structured output format with `// filename:` markers.
 
 ### Low Priority
 7. **WebContainer SDK** — For projects that need Node.js execution (Next.js, npm packages).
@@ -405,8 +447,8 @@ When starting a new AI assistant session:
    # Opens at http://localhost:5173
    ```
 3. **Add HF token** in Settings (click MINDI logo → Settings → paste `hf_...` token)
-4. **Test with real MINDI model** — type "landing page", skip plan modal, verify real response comes back
-5. **Continue from "What Remains" section** above — start with suggestion chips or syntax highlighting
+4. **Test with real MINDI model** — click a suggestion chip (e.g., 'Dashboard'), skip plan modal, and verify real response comes back with syntax highlighting.
+5. **Continue from "What Remains" section** above — start with the vision loop or multi-file support.
 
 ---
 

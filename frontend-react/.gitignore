@@ -1,0 +1,12 @@
+node_modules
+dist
+.vite
+output
+vite-dev.log
+vite-dev.err.log
+.env
+.env.local
+.env.*.local
+__pycache__/
+*.py[cod]
+.pytest_cache/
